@@ -89,10 +89,6 @@ const TimeSlotParticipationTable = ({ eventId, timeSlotId, timeSlotName, maxPart
     return participation.filter(p => p.status === 'accepted').length;
   };
 
-  const getAvailableSpots = () => {
-    return Math.max(0, maxParticipants - getAcceptedCount());
-  };
-
   const canAcceptMore = () => {
     return getAcceptedCount() < maxParticipants;
   };
