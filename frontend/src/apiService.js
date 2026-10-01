@@ -1,9 +1,34 @@
 import axios from 'axios';
+import { getAuthSession, refreshAuthSession } from './authService';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 const API_ENDPOINTS = {
   base: `${API_BASE_URL}/api`
 };
+
+axios.interceptors.request.use((config) => {
+  const session = getAuthSession();
+  if (session?.accessToken) {
+    config.headers.Authorization = `Bearer ${session.accessToken}`;
+  }
+  return config;
+});
+
+axios.interceptors.response.use(
+  response => response,
+  async error => {
+    const config = error.config;
+    if (error.response?.status !== 401 || !config || config._authRetry || config.url?.includes('/api/auth/')) {
+      return Promise.reject(error);
+    }
+
+    config._authRetry = true;
+    const session = await refreshAuthSession();
+    if (!session) return Promise.reject(error);
+    config.headers.Authorization = `Bearer ${session.accessToken}`;
+    return axios(config);
+  }
+);
 
 // API service for handling all backend communication
 class ApiService {

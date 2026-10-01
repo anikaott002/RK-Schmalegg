@@ -1,166 +1,83 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import './UserLogin.css';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+import { authenticate, getAuthenticatedUser } from './authService';
 
 const LOGO_URL = 'https://tse4.mm.bing.net/th/id/OIP.UORK-u3V7UVpyTeEcb0y_QHaHa?rs=1&pid=ImgDetMain&o=7&rm=3';
 
 const UserLogin = ({ onUserSelect }) => {
-  const [persons, setPersons] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [registering, setRegistering] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [loginForm, setLoginForm] = useState({
-    name: '',
-    password: ''
-  });
-  const [suggestions, setSuggestions] = useState([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [form, setForm] = useState({ email: '', password: '' });
 
-  useEffect(() => {
-    fetchPersons();
-  }, []);
+  const handleInputChange = (field, value) => {
+    setForm(previous => ({ ...previous, [field]: value }));
+    setError('');
+    setNotice('');
+  };
 
-  const fetchPersons = async () => {
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setError('');
+    setNotice('');
+    setLoading(true);
+
     try {
-      setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/persons`);
-      const result = await response.json();
-      
-      if (result.success) {
-        setPersons(result.data);
-      } else {
-        setError(result.message || 'Fehler beim Laden der Personen');
+      const result = await authenticate(registering ? 'register' : 'login', form);
+      if (registering && result.emailConfirmationRequired) {
+        setNotice(result.message);
+        return;
       }
-    } catch (error) {
-      setError('Verbindungsfehler');
-      console.error('Error fetching persons:', error);
+
+      const user = await getAuthenticatedUser();
+      if (user.isAdmin) {
+        onUserSelect({ id: 'admin', fullName: 'Administrator', isAdmin: true });
+      } else if (user.person) {
+        onUserSelect({ ...user.person, isAdmin: false });
+      } else {
+        setError('Für diese E-Mail-Adresse wurde kein Mitgliederprofil gefunden. Bitte wenden Sie sich an den Administrator.');
+      }
+    } catch (requestError) {
+      setError(requestError.message || 'Anmeldung fehlgeschlagen');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleInputChange = (field, value) => {
-    setLoginForm(prev => ({ ...prev, [field]: value }));
+  const toggleMode = () => {
+    setRegistering(previous => !previous);
     setError('');
-
-    if (field === 'name') {
-      if (value.length > 0 && value.toLowerCase() !== 'admin') {
-        const filtered = persons.filter(person => {
-          const fullNameNoSpace = (person.firstName + person.lastName).toLowerCase();
-          const fullNameWithSpace = (person.firstName + ' ' + person.lastName).toLowerCase();
-          const searchValue = value.toLowerCase();
-          
-          return fullNameNoSpace.includes(searchValue) || 
-                 fullNameWithSpace.includes(searchValue) ||
-                 person.firstName.toLowerCase().includes(searchValue) ||
-                 person.lastName.toLowerCase().includes(searchValue);
-        });
-        setSuggestions(filtered);
-        setShowSuggestions(filtered.length > 0);
-      } else {
-        setSuggestions([]);
-        setShowSuggestions(false);
-      }
-    }
+    setNotice('');
   };
-
-  const handleSuggestionClick = (person) => {
-    const nameValue = person.firstName + person.lastName;
-    setLoginForm(prev => ({ ...prev, name: nameValue }));
-    setSuggestions([]);
-    setShowSuggestions(false);
-  };
-
-  const handleLogin = (e) => {
-    e.preventDefault();
-    
-    if (!loginForm.name || !loginForm.password) {
-      setError('Bitte füllen Sie alle Felder aus');
-      return;
-    }
-
-    if (loginForm.password !== '123') {
-      setError('Falsches Passwort');
-      return;
-    }
-
-    // Check for admin login
-    if (loginForm.name.toLowerCase() === 'admin') {
-      onUserSelect({ id: 'admin', fullName: 'Administrator', isAdmin: true });
-      return;
-    }
-
-    // Find matching user
-    const matchingUser = persons.find(person => {
-      const fullNameNoSpace = (person.firstName + person.lastName).toLowerCase();
-      return fullNameNoSpace === loginForm.name.toLowerCase();
-    });
-
-    if (matchingUser) {
-      onUserSelect(matchingUser);
-    } else {
-      setError('Benutzer nicht gefunden');
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="user-login-container">
-        <div className="login-box">
-          <h2>Lade Benutzer...</h2>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="user-login-container">
       <div className="login-box">
         <div className="login-header">
           <img src={LOGO_URL} alt="RK Schmalegg Logo" className="header-logo" />
-          <h2>Anmeldung</h2>
+          <h2>{registering ? 'Registrierung' : 'Anmeldung'}</h2>
         </div>
-        <p className="login-subtitle">Bitte melden Sie sich an</p>
-        
-        {error && <div className="error-message">{error}</div>}
-        
-        <form onSubmit={handleLogin} className="login-form">
+        <p className="login-subtitle">
+          {registering ? 'Konto mit E-Mail-Adresse und Passwort erstellen' : 'Bitte melden Sie sich an'}
+        </p>
+
+        {error && <div className="error-message" role="alert">{error}</div>}
+        {notice && <div className="success-message" role="status">{notice}</div>}
+
+        <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
-            <label htmlFor="name">Name:</label>
-            <div className="autocomplete-container">
-              <input
-                type="text"
-                id="name"
-                value={loginForm.name}
-                onChange={(e) => handleInputChange('name', e.target.value)}
-                onFocus={() => {
-                  if (loginForm.name.length > 0 && loginForm.name.toLowerCase() !== 'admin') {
-                    // Re-trigger filtering when focusing
-                    handleInputChange('name', loginForm.name);
-                  }
-                }}
-                onBlur={() => {
-                  // Delay hiding suggestions to allow clicking
-                  setTimeout(() => setShowSuggestions(false), 200);
-                }}
-                placeholder="Admin oder Name (z.B. MaxMustermann)"
-                className="login-input"
-                autoComplete="off"
-              />
-              {showSuggestions && suggestions.length > 0 && (
-                <div className="suggestions-dropdown">
-                  {suggestions.map((person) => (
-                    <div
-                      key={person.id}
-                      className="suggestion-item"
-                      onClick={() => handleSuggestionClick(person)}
-                    >
-                      <span className="suggestion-name">{person.firstName}{person.lastName}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <label htmlFor="email">E-Mail-Adresse:</label>
+            <input
+              type="email"
+              id="email"
+              value={form.email}
+              onChange={event => handleInputChange('email', event.target.value)}
+              placeholder="name@beispiel.de"
+              className="login-input"
+              autoComplete="email"
+              required
+            />
           </div>
 
           <div className="form-group">
@@ -168,17 +85,25 @@ const UserLogin = ({ onUserSelect }) => {
             <input
               type="password"
               id="password"
-              value={loginForm.password}
-              onChange={(e) => handleInputChange('password', e.target.value)}
-              placeholder="123"
+              value={form.password}
+              onChange={event => handleInputChange('password', event.target.value)}
+              placeholder={registering ? 'Mindestens 12 Zeichen' : 'Passwort'}
               className="login-input"
+              autoComplete={registering ? 'new-password' : 'current-password'}
+              minLength={registering ? 12 : undefined}
+              maxLength={128}
+              required
             />
           </div>
 
-          <button type="submit" className="login-button">
-            Anmelden
+          <button type="submit" className="login-button" disabled={loading}>
+            {loading ? 'Bitte warten...' : registering ? 'Konto erstellen' : 'Anmelden'}
           </button>
         </form>
+
+        <button type="button" className="login-mode-button" onClick={toggleMode} disabled={loading}>
+          {registering ? 'Bereits registriert? Anmelden' : 'Noch kein Konto? Registrieren'}
+        </button>
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './TimeSlotParticipationTable.css';
+import { apiFetch } from './authService';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
@@ -19,7 +20,7 @@ const TimeSlotParticipationTable = ({ eventId, timeSlotId, timeSlotName, maxPart
   const fetchParticipation = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/events/${eventId}/timeslots/${timeSlotId}/participation`);
+      const response = await apiFetch(`${API_BASE_URL}/api/events/${eventId}/timeslots/${timeSlotId}/participation`);
       const result = await response.json();
       
       if (result.success) {
@@ -37,7 +38,7 @@ const TimeSlotParticipationTable = ({ eventId, timeSlotId, timeSlotName, maxPart
 
   const fetchAllPersons = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/persons`);
+      const response = await apiFetch(`${API_BASE_URL}/api/persons`);
       const result = await response.json();
       
       if (result.success) {
@@ -50,7 +51,7 @@ const TimeSlotParticipationTable = ({ eventId, timeSlotId, timeSlotName, maxPart
 
   const updateParticipationStatus = async (personId, status) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/events/${eventId}/timeslots/${timeSlotId}/participation`, {
+      const response = await apiFetch(`${API_BASE_URL}/api/events/${eventId}/timeslots/${timeSlotId}/participation`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

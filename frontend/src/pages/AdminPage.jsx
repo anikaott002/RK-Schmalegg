@@ -7,6 +7,7 @@ import EventForm from '../EventForm';
 import PersonsTable from '../PersonsTable';
 import TimeSlotManager from '../TimeSlotManager';
 import TimeSlotForm from '../TimeSlotForm';
+import { getAuthenticatedUser, logout } from '../authService';
 import '../App.css';
 
 const LOGO_URL = 'https://tse4.mm.bing.net/th/id/OIP.UORK-u3V7UVpyTeEcb0y_QHaHa?rs=1&pid=ImgDetMain&o=7&rm=3';
@@ -21,6 +22,7 @@ const AdminPage = () => {
   const [selectedTimeSlotState, setSelectedTimeSlotState] = useState(null);
   const [showParticipants, setShowParticipants] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [error, setError] = useState(null);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
@@ -38,8 +40,23 @@ const AdminPage = () => {
   const currentView = getCurrentView();
 
   useEffect(() => {
+    let active = true;
+    getAuthenticatedUser()
+      .then(user => {
+        if (!user.isAdmin) {
+          navigate('/login', { replace: true });
+          return;
+        }
+        if (active) setIsAdmin(true);
+      })
+      .catch(() => navigate('/login', { replace: true }));
+    return () => { active = false; };
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
     loadEvents();
-  }, [selectedYear]);
+  }, [selectedYear, isAdmin]);
 
   useEffect(() => {
     // Load specific event when eventId is in URL
@@ -123,7 +140,7 @@ const AdminPage = () => {
   };
 
   const handleLogout = () => {
-    navigate('/');
+    logout().finally(() => navigate('/'));
   };
 
   const handleNavigationClick = (view) => {
@@ -264,7 +281,7 @@ const AdminPage = () => {
     navigate(`/admin/events/${event.id}/timeslots/${timeSlot.id}/participants`);
   };
 
-  if (loading) {
+  if (!isAdmin || loading) {
     return (
       <>
         <header className="App-header">
@@ -276,7 +293,7 @@ const AdminPage = () => {
           </div>
         </header>
         <main className="App-main">
-          <div className="loading-message">Lade Events...</div>
+          <div className="loading-message">{isAdmin ? 'Lade Events...' : 'Prüfe Admin-Anmeldung...'}</div>
         </main>
       </>
     );

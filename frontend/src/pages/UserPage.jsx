@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import UserDashboard from '../UserDashboard';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+import { getAuthenticatedUser, logout } from '../authService';
 
 const UserPage = () => {
   const { userId } = useParams();
@@ -17,13 +16,10 @@ const UserPage = () => {
   const loadUser = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/persons/${userId}`);
-      const result = await response.json();
-      
-      if (result.success) {
-        setUser(result.data);
+      const authenticatedUser = await getAuthenticatedUser();
+      if (!authenticatedUser.isAdmin && String(authenticatedUser.person?.id) === String(userId)) {
+        setUser(authenticatedUser.person);
       } else {
-        console.error('User not found');
         navigate('/login');
       }
     } catch (error) {
@@ -35,7 +31,7 @@ const UserPage = () => {
   };
 
   const handleLogout = () => {
-    navigate('/');
+    logout().finally(() => navigate('/'));
   };
 
   if (loading) {

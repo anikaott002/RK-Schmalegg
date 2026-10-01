@@ -62,6 +62,15 @@
   margin-bottom: 20px;
 }
 
+.success-message {
+  background: #f0fff4;
+  color: #276749;
+  border: 2px solid #9ae6b4;
+  padding: 10px;
+  border-radius: 5px;
+  margin-bottom: 20px;
+}
+
 .login-form {
   display: flex;
   flex-direction: column;
@@ -169,6 +178,22 @@
 
 .login-button:active {
   transform: translateY(0);
+}
+
+.login-button:disabled,
+.login-mode-button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.login-mode-button {
+  background: none;
+  border: 0;
+  color: #333;
+  cursor: pointer;
+  font-size: 14px;
+  margin-top: 18px;
+  text-decoration: underline;
 }
 
 /* Responsive design */

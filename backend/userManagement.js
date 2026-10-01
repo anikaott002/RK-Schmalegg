@@ -73,6 +73,16 @@ export async function getPersonById(id) {
   return { ...rowToPerson(data), isAdmin: false };
 }
 
+export async function getPersonByEmail(email) {
+  const { data, error } = await supabase
+    .from('persons')
+    .select('*')
+    .eq('email', String(email).trim().toLowerCase())
+    .maybeSingle();
+  if (error) throw error;
+  return data ? { ...rowToPerson(data), isAdmin: false } : null;
+}
+
 export async function createPerson(personData) {
   const firstName = String(personData.firstName || '').trim();
   const lastName = String(personData.lastName || '').trim();
@@ -112,4 +122,4 @@ export async function importPersons(personsArray) {
   return (data || []).map(rowToPerson);
 }
 
-export default { getAllPersons, getPersonById, createPerson, importPersons, calculatePersonHours };
+export default { getAllPersons, getPersonById, getPersonByEmail, createPerson, importPersons, calculatePersonHours };

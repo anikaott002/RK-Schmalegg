@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { EventUtils } from './apiService';
 import ParticipantsTable from './ParticipantsTable';
+import { apiFetch, logout } from './authService';
 import './UserDashboard.css';
 
 const LOGO_URL = 'https://tse4.mm.bing.net/th/id/OIP.UORK-u3V7UVpyTeEcb0y_QHaHa?rs=1&pid=ImgDetMain&o=7&rm=3';
@@ -50,7 +51,7 @@ const UserDashboard = ({ user, onLogout }) => {
     try {
       setLoading(true);
       // Only fetch published events for regular users
-      const eventsResponse = await fetch(`${API_BASE_URL}/api/events?status=published`);
+      const eventsResponse = await apiFetch(`${API_BASE_URL}/api/events?status=published`);
       const eventsResult = await eventsResponse.json();
       
       if (eventsResult.success) {
@@ -73,14 +74,14 @@ const UserDashboard = ({ user, onLogout }) => {
     for (const event of eventsList) {
       try {
         // First get the timeslots for this event
-        const timeSlotsResponse = await fetch(`${API_BASE_URL}/api/events/${event.id}/timeslots`);
+        const timeSlotsResponse = await apiFetch(`${API_BASE_URL}/api/events/${event.id}/timeslots`);
         const timeSlotsResult = await timeSlotsResponse.json();
         
         if (timeSlotsResult.success && timeSlotsResult.data.length > 0) {
           // For each timeslot, get participation data
           for (const timeSlot of timeSlotsResult.data) {
             try {
-              const participationResponse = await fetch(`${API_BASE_URL}/api/events/${event.id}/timeslots/${timeSlot.id}/participation`);
+              const participationResponse = await apiFetch(`${API_BASE_URL}/api/events/${event.id}/timeslots/${timeSlot.id}/participation`);
               const participationResult = await participationResponse.json();
               
               if (participationResult.success) {
@@ -117,7 +118,7 @@ const UserDashboard = ({ user, onLogout }) => {
 
   const updateTimeSlotParticipation = async (eventId, timeSlotId, status) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/events/${eventId}/timeslots/${timeSlotId}/participation`, {
+      const response = await apiFetch(`${API_BASE_URL}/api/events/${eventId}/timeslots/${timeSlotId}/participation`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -169,7 +170,7 @@ const UserDashboard = ({ user, onLogout }) => {
   };
 
   const handleLogout = () => {
-    navigate('/');
+    logout().finally(() => navigate('/'));
   };
 
   const getAvailableYears = () => {

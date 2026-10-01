@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './PersonsTable.css';
+import { apiFetch } from './authService';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
@@ -23,7 +24,7 @@ const PersonsTable = () => {
   const fetchPersons = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/persons?year=${selectedYear}`);
+      const response = await apiFetch(`${API_BASE_URL}/api/persons?year=${selectedYear}`);
       const result = await response.json();
       
       if (result.success) {
@@ -46,7 +47,7 @@ const PersonsTable = () => {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/persons`, {
+      const response = await apiFetch(`${API_BASE_URL}/api/persons`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

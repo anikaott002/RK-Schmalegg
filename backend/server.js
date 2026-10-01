@@ -1,7 +1,9 @@
 import express from 'express'
 import cors from 'cors'
+import { rateLimit } from 'express-rate-limit'
 import * as dataService from './data.js'
 import * as userService from './userManagement.js'
+import { authClient, isAdminEmail, isAdminUser, optionalAuth, requireAdmin, requireAuth, requireAuthConfiguration } from './auth.js'
 
 const corsOptions = {
   origin: true, // Allow all origins for now - can be restricted later
@@ -12,18 +14,180 @@ const app = express()
 
 app.use(cors(corsOptions))
 app.use(express.json()) // Parse JSON request bodies
+const authRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { success: false, message: 'Zu viele Versuche. Bitte später erneut versuchen.' },
+})
+
+function sanitizePublicEvent(event) {
+  return {
+    ...event,
+    timeSlots: (event.timeSlots || []).map(slot => ({
+      ...slot,
+      participants: [],
+    })),
+  }
+}
 
 // Basic health check
 app.get('/', async (req, res) => {
   res.json({ message: 'RK Schmalegg Eventmanager API Server läuft!' })
 })
 
+app.post('/api/auth/register', authRateLimit, requireAuthConfiguration, async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase()
+  const password = req.body?.password
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || typeof password !== 'string' || password.length < 12 || password.length > 128) {
+    return res.status(400).json({
+      success: false,
+      message: 'Bitte geben Sie eine gültige E-Mail-Adresse und ein Passwort mit mindestens 12 Zeichen ein.',
+    })
+  }
+
+  try {
+    const member = await userService.getPersonByEmail(email)
+    if (!member && !isAdminEmail(email)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Registrierung nur mit einer hinterlegten Mitglieder- oder Admin-E-Mail möglich.',
+      })
+    }
+    const { data, error } = await authClient.auth.signUp({ email, password })
+    if (error) {
+      console.error('Registrierung fehlgeschlagen:', error.message)
+      return res.status(400).json({
+        success: false,
+        message: 'Registrierung nicht möglich. Prüfen Sie die Eingaben und die E-Mail-Konfiguration.',
+      })
+    }
+    res.status(201).json({
+      success: true,
+      data: {
+        session: data.session ? {
+          accessToken: data.session.access_token,
+          refreshToken: data.session.refresh_token,
+        } : null,
+        emailConfirmationRequired: !data.session,
+      },
+      message: data.session
+        ? 'Registrierung erfolgreich'
+        : 'Bitte bestätigen Sie Ihre E-Mail-Adresse über den zugesandten Link.',
+    })
+  } catch (error) {
+    console.error('Registrierung fehlgeschlagen:', error)
+    res.status(500).json({ success: false, message: 'Registrierung derzeit nicht möglich' })
+  }
+})
+
+app.post('/api/auth/login', authRateLimit, requireAuthConfiguration, async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase()
+  const password = req.body?.password
+  if (!email || typeof password !== 'string' || !password) {
+    return res.status(400).json({ success: false, message: 'E-Mail und Passwort sind erforderlich.' })
+  }
+
+  try {
+    const { data, error } = await authClient.auth.signInWithPassword({ email, password })
+    if (error || !data.session) {
+      return res.status(401).json({ success: false, message: 'E-Mail oder Passwort ungültig.' })
+    }
+    res.json({
+      success: true,
+      data: {
+        session: {
+          accessToken: data.session.access_token,
+          refreshToken: data.session.refresh_token,
+        },
+      },
+    })
+  } catch (error) {
+    console.error('Anmeldung fehlgeschlagen:', error)
+    res.status(503).json({ success: false, message: 'Anmeldung derzeit nicht möglich' })
+  }
+})
+
+app.post('/api/auth/refresh', authRateLimit, requireAuthConfiguration, async (req, res) => {
+  const refreshToken = req.body?.refreshToken
+  if (typeof refreshToken !== 'string' || !refreshToken) {
+    return res.status(400).json({ success: false, message: 'Refresh-Token fehlt.' })
+  }
+
+  try {
+    const { data, error } = await authClient.auth.refreshSession({ refresh_token: refreshToken })
+    if (error || !data.session) {
+      return res.status(401).json({ success: false, message: 'Sitzung abgelaufen. Bitte erneut anmelden.' })
+    }
+    res.json({
+      success: true,
+      data: {
+        session: {
+          accessToken: data.session.access_token,
+          refreshToken: data.session.refresh_token,
+        },
+      },
+    })
+  } catch (error) {
+    console.error('Sitzung konnte nicht erneuert werden:', error)
+    res.status(503).json({ success: false, message: 'Sitzung kann derzeit nicht erneuert werden' })
+  }
+})
+
+app.post('/api/auth/logout', requireAuthConfiguration, async (req, res) => {
+  const accessToken = req.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1]
+  const refreshToken = req.body?.refreshToken
+  if (!accessToken || typeof refreshToken !== 'string' || !refreshToken) {
+    return res.status(400).json({ success: false, message: 'Sitzungsdaten fehlen.' })
+  }
+
+  try {
+    const { error: sessionError } = await authClient.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    })
+    if (sessionError) {
+      return res.status(401).json({ success: false, message: 'Sitzung ist bereits ungültig.' })
+    }
+    const { error } = await authClient.auth.signOut({ scope: 'local' })
+    if (error) throw error
+    res.json({ success: true })
+  } catch (error) {
+    console.error('Abmeldung fehlgeschlagen:', error)
+    res.status(503).json({ success: false, message: 'Abmeldung derzeit nicht möglich' })
+  }
+})
+
+app.get('/api/auth/me', requireAuth, async (req, res) => {
+  try {
+    const person = req.isAdmin ? null : await userService.getPersonByEmail(req.user.email)
+    res.json({
+      success: true,
+      data: {
+        email: req.user.email,
+        isAdmin: isAdminUser(req.user),
+        person,
+      },
+    })
+  } catch (error) {
+    console.error('Profil konnte nicht geladen werden:', error)
+    res.status(500).json({ success: false, message: 'Profil konnte nicht geladen werden' })
+  }
+})
+
 // Get all events (with optional status filter)
-app.get('/api/events', async (req, res) => {
+app.get('/api/events', optionalAuth, async (req, res) => {
   try {
     const { status } = req.query;
     let events = await dataService.getAllEvents();
     
+    if (!req.isAdmin) {
+      events = events.filter(event => event.status === 'published');
+      if (status && status !== 'published') events = [];
+      events = events.map(sanitizePublicEvent);
+    }
+
     // Filter by status if provided
     if (status) {
       events = events.filter(event => event.status === status);
@@ -44,15 +208,19 @@ app.get('/api/events', async (req, res) => {
 });
 
 // Get specific event by ID
-app.get('/api/events/:id', async (req, res) => {
+app.get('/api/events/:id', optionalAuth, async (req, res) => {
   try {
-    const event = await dataService.getEventById(req.params.id)
+    let event = await dataService.getEventById(req.params.id)
     if (!event) {
       return res.status(404).json({
         success: false,
         message: 'Event nicht gefunden'
       })
     }
+    if (!req.isAdmin && event.status !== 'published') {
+      return res.status(404).json({ success: false, message: 'Event nicht gefunden' })
+    }
+    if (!req.isAdmin) event = sanitizePublicEvent(event)
     res.json({
       success: true,
       data: event
@@ -67,7 +235,7 @@ app.get('/api/events/:id', async (req, res) => {
 })
 
 // Create new event
-app.post('/api/events', async (req, res) => {
+app.post('/api/events', requireAdmin, async (req, res) => {
   try {
     const newEvent = await dataService.createEvent(req.body)
     res.status(201).json({
@@ -85,7 +253,7 @@ app.post('/api/events', async (req, res) => {
 })
 
 // Update existing event
-app.put('/api/events/:id', async (req, res) => {
+app.put('/api/events/:id', requireAdmin, async (req, res) => {
   try {
     const updatedEvent = await dataService.updateEvent(req.params.id, req.body)
     if (!updatedEvent) {
@@ -109,7 +277,7 @@ app.put('/api/events/:id', async (req, res) => {
 })
 
 // Update event status (publish/unpublish)
-app.put('/api/events/:id/status', async (req, res) => {
+app.put('/api/events/:id/status', requireAdmin, async (req, res) => {
   try {
     const { status } = req.body;
     if (!status || !['draft', 'published'].includes(status)) {
@@ -142,7 +310,7 @@ app.put('/api/events/:id/status', async (req, res) => {
 });
 
 // Delete event
-app.delete('/api/events/:id', async (req, res) => {
+app.delete('/api/events/:id', requireAdmin, async (req, res) => {
   try {
     const deleted = await dataService.deleteEvent(req.params.id)
     if (!deleted) {
@@ -167,7 +335,7 @@ app.delete('/api/events/:id', async (req, res) => {
 // User Management Endpoints
 
 // Get all persons
-app.get('/api/persons', async (req, res) => {
+app.get('/api/persons', requireAdmin, async (req, res) => {
   try {
     const { year } = req.query;
     const persons = await userService.getAllPersons(year ? parseInt(year) : null);
@@ -186,7 +354,7 @@ app.get('/api/persons', async (req, res) => {
 })
 
 // Get specific person by ID
-app.get('/api/persons/:id', async (req, res) => {
+app.get('/api/persons/:id', requireAuth, async (req, res) => {
   try {
     const person = await userService.getPersonById(req.params.id)
     if (!person) {
@@ -194,6 +362,9 @@ app.get('/api/persons/:id', async (req, res) => {
         success: false,
         message: 'Person nicht gefunden'
       })
+    }
+    if (!req.isAdmin && String(person.email || '').toLowerCase() !== req.user.email.toLowerCase()) {
+      return res.status(404).json({ success: false, message: 'Person nicht gefunden' })
     }
     res.json({
       success: true,
@@ -209,7 +380,7 @@ app.get('/api/persons/:id', async (req, res) => {
 })
 
 // Create new person
-app.post('/api/persons', async (req, res) => {
+app.post('/api/persons', requireAdmin, async (req, res) => {
   try {
     const newPerson = await userService.createPerson(req.body)
     res.status(201).json({
@@ -227,7 +398,7 @@ app.post('/api/persons', async (req, res) => {
 })
 
 // Import persons from array (overwrites all existing persons)
-app.post('/api/persons/import', async (req, res) => {
+app.post('/api/persons/import', requireAdmin, async (req, res) => {
   try {
     const { persons } = req.body;
     
@@ -258,7 +429,7 @@ app.post('/api/persons/import', async (req, res) => {
 // Time Slot Management API Routes
 
 // Get all time slots for an event
-app.get('/api/events/:eventId/timeslots', async (req, res) => {
+app.get('/api/events/:eventId/timeslots', optionalAuth, async (req, res) => {
   try {
     const event = await dataService.getEventById(req.params.eventId)
     if (!event) {
@@ -267,9 +438,15 @@ app.get('/api/events/:eventId/timeslots', async (req, res) => {
         message: 'Event nicht gefunden'
       })
     }
+    if (!req.isAdmin && event.status !== 'published') {
+      return res.status(404).json({ success: false, message: 'Event nicht gefunden' })
+    }
     res.json({
       success: true,
-      data: event.timeSlots || [],
+      data: req.isAdmin ? event.timeSlots || [] : (event.timeSlots || []).map(slot => ({
+        ...slot,
+        participants: [],
+      })),
       eventId: event.id
     })
   } catch (error) {
@@ -282,7 +459,7 @@ app.get('/api/events/:eventId/timeslots', async (req, res) => {
 })
 
 // Add time slot to event
-app.post('/api/events/:eventId/timeslots', async (req, res) => {
+app.post('/api/events/:eventId/timeslots', requireAdmin, async (req, res) => {
   try {
     const timeSlot = await dataService.addTimeSlot(req.params.eventId, req.body)
     if (!timeSlot) {
@@ -306,7 +483,7 @@ app.post('/api/events/:eventId/timeslots', async (req, res) => {
 })
 
 // Update time slot
-app.put('/api/events/:eventId/timeslots/:timeSlotId', async (req, res) => {
+app.put('/api/events/:eventId/timeslots/:timeSlotId', requireAdmin, async (req, res) => {
   try {
     const timeSlot = await dataService.updateTimeSlot(req.params.eventId, req.params.timeSlotId, req.body)
     if (!timeSlot) {
@@ -330,7 +507,7 @@ app.put('/api/events/:eventId/timeslots/:timeSlotId', async (req, res) => {
 })
 
 // Delete time slot
-app.delete('/api/events/:eventId/timeslots/:timeSlotId', async (req, res) => {
+app.delete('/api/events/:eventId/timeslots/:timeSlotId', requireAdmin, async (req, res) => {
   try {
     const success = await dataService.deleteTimeSlot(req.params.eventId, req.params.timeSlotId)
     if (!success) {
@@ -353,9 +530,18 @@ app.delete('/api/events/:eventId/timeslots/:timeSlotId', async (req, res) => {
 })
 
 // Get time slot participation
-app.get('/api/events/:eventId/timeslots/:timeSlotId/participation', async (req, res) => {
+app.get('/api/events/:eventId/timeslots/:timeSlotId/participation', requireAuth, async (req, res) => {
   try {
-    const participation = await dataService.getTimeSlotParticipation(req.params.eventId, req.params.timeSlotId)
+    const event = await dataService.getEventById(req.params.eventId)
+    if (!event || (!req.isAdmin && event.status !== 'published')) {
+      return res.status(404).json({ success: false, message: 'Event nicht gefunden' })
+    }
+    let participation = await dataService.getTimeSlotParticipation(req.params.eventId, req.params.timeSlotId)
+    if (!req.isAdmin) {
+      const person = await userService.getPersonByEmail(req.user.email)
+      if (!person) return res.status(403).json({ success: false, message: 'Kein zugeordnetes Mitgliederprofil gefunden' })
+      participation = participation.filter(entry => entry.person?.id === person.id)
+    }
     res.json({
       success: true,
       data: participation
@@ -370,9 +556,19 @@ app.get('/api/events/:eventId/timeslots/:timeSlotId/participation', async (req, 
 })
 
 // Manage time slot participation
-app.post('/api/events/:eventId/timeslots/:timeSlotId/participation', async (req, res) => {
+app.post('/api/events/:eventId/timeslots/:timeSlotId/participation', requireAuth, async (req, res) => {
   try {
-    const { personId, status } = req.body
+    const { status } = req.body
+    let { personId } = req.body
+    if (!req.isAdmin) {
+      const event = await dataService.getEventById(req.params.eventId)
+      if (!event || event.status !== 'published') {
+        return res.status(404).json({ success: false, message: 'Event nicht gefunden' })
+      }
+      const person = await userService.getPersonByEmail(req.user.email)
+      if (!person) return res.status(403).json({ success: false, message: 'Kein zugeordnetes Mitgliederprofil gefunden' })
+      personId = person.id
+    }
     
     if (status === 'remove') {
       const success = await dataService.removeTimeSlotParticipation(req.params.eventId, req.params.timeSlotId, personId)
