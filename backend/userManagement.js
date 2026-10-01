@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient.js';
 
+
 function calculateHours(timeFrom, timeTo) {
   if (!timeFrom || !timeTo) return 0;
   const [fromHour, fromMin] = String(timeFrom).split(':').map(Number);

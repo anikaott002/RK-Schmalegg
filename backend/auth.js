@@ -2,10 +2,12 @@ import { createClient } from '@supabase/supabase-js';
 import { supabase } from './supabaseClient.js';
 
 const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+const supabasePublishableKey =
+  process.env.SUPABASE_PUBLISHABLE_KEY ||
+  process.env.SUPABASE_ANON_KEY;
 
-export const authClient = supabaseUrl && supabaseAnonKey
-  ? createClient(supabaseUrl, supabaseAnonKey, {
+export const authClient = supabaseUrl && supabasePublishableKey
+  ? createClient(supabaseUrl, supabasePublishableKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,

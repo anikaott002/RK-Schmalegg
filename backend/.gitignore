@@ -1,5 +1,18 @@
+# Secrets / Environment
+**/.env
+**/.env.*
+!**/.env.example
+
+# Dependencies
+**/node_modules/
+
+# Builds
+**/dist/
+
 node_modules/
 .env
 .env.*
 !.env.example
 data/.env
+
+
