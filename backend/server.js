@@ -64,17 +64,15 @@ app.post('/api/auth/register', authRateLimit, requireAuthConfiguration, async (r
       })
     }
     res.status(201).json({
-      success: true,
-      data: {
-        session: data.session ? {
-          accessToken: data.session.access_token,
-          refreshToken: data.session.refresh_token,
-        } : null,
-        emailConfirmationRequired: !data.session,
+    success: true,
+    data: {
+      session: {
+        accessToken: data.session.access_token,
+        refreshToken: data.session.refresh_token,
       },
-      message: data.session
-        ? 'Registrierung erfolgreich'
-        : 'Bitte bestätigen Sie Ihre E-Mail-Adresse über den zugesandten Link.',
+      emailConfirmationRequired: false,
+    },
+    message: 'Registrierung erfolgreich',
     })
   } catch (error) {
     console.error('Registrierung fehlgeschlagen:', error)

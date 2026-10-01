@@ -40,10 +40,13 @@ function authenticationUnavailable(res) {
 async function verifyToken(req, res, token) {
   try {
     const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data.user || !data.user.email_confirmed_at) {
-      res.status(401).json({ success: false, message: 'Ungültige oder nicht bestätigte Anmeldung' });
-      return false;
-    }
+    if (error || !data.user) {
+        res.status(401).json({
+          success: false,
+          message: 'Ungültige Anmeldung'
+        });
+        return false;
+      }
 
     req.user = data.user;
     req.isAdmin = isAdminUser(data.user);

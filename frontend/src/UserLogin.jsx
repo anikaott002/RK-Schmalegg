@@ -24,13 +24,15 @@ const UserLogin = ({ onUserSelect }) => {
     setLoading(true);
 
     try {
-      const result = await authenticate(registering ? 'register' : 'login', form);
-      if (registering && result.emailConfirmationRequired) {
-        setNotice(result.message);
-        return;
-      }
+      const result = await authenticate(
+      registering ? 'register' : 'login',
+      form
+    );
+
+
 
       const user = await getAuthenticatedUser();
+      
       if (user.isAdmin) {
         onUserSelect({ id: 'admin', fullName: 'Administrator', isAdmin: true });
       } else if (user.person) {
