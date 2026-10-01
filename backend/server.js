@@ -1,0 +1,446 @@
+import express from 'express'
+import cors from 'cors'
+import * as dataService from './data.js'
+import * as userService from './userManagement.js'
+
+const corsOptions = {
+  origin: true, // Allow all origins for now - can be restricted later
+  optionsSuccessStatus: 200,
+}
+
+const app = express()
+
+app.use(cors(corsOptions))
+app.use(express.json()) // Parse JSON request bodies
+
+// Basic health check
+app.get('/', async (req, res) => {
+  res.json({ message: 'RK Schmalegg Eventmanager API Server läuft!' })
+})
+
+// Get all events (with optional status filter)
+app.get('/api/events', async (req, res) => {
+  try {
+    const { status } = req.query;
+    let events = await dataService.getAllEvents();
+    
+    // Filter by status if provided
+    if (status) {
+      events = events.filter(event => event.status === status);
+    }
+    
+    res.json({
+      success: true,
+      data: events,
+      totalEvents: events.length
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Fehler beim Laden der Events',
+      error: error.message
+    });
+  }
+});
+
+// Get specific event by ID
+app.get('/api/events/:id', async (req, res) => {
+  try {
+    const event = await dataService.getEventById(req.params.id)
+    if (!event) {
+      return res.status(404).json({
+        success: false,
+        message: 'Event nicht gefunden'
+      })
+    }
+    res.json({
+      success: true,
+      data: event
+    })
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Fehler beim Laden des Events',
+      error: error.message
+    })
+  }
+})
+
+// Create new event
+app.post('/api/events', async (req, res) => {
+  try {
+    const newEvent = await dataService.createEvent(req.body)
+    res.status(201).json({
+      success: true,
+      data: newEvent,
+      message: 'Event erfolgreich erstellt'
+    })
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: 'Fehler beim Erstellen des Events',
+      error: error.message
+    })
+  }
+})
+
+// Update existing event
+app.put('/api/events/:id', async (req, res) => {
+  try {
+    const updatedEvent = await dataService.updateEvent(req.params.id, req.body)
+    if (!updatedEvent) {
+      return res.status(404).json({
+        success: false,
+        message: 'Event nicht gefunden'
+      })
+    }
+    res.json({
+      success: true,
+      data: updatedEvent,
+      message: 'Event erfolgreich aktualisiert'
+    })
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: 'Fehler beim Aktualisieren des Events',
+      error: error.message
+    })
+  }
+})
+
+// Update event status (publish/unpublish)
+app.put('/api/events/:id/status', async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!status || !['draft', 'published'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Ungültiger Status. Erlaubt sind: draft, published'
+      });
+    }
+
+    const updatedEvent = await dataService.updateEvent(req.params.id, { status });
+    if (!updatedEvent) {
+      return res.status(404).json({
+        success: false,
+        message: 'Event nicht gefunden'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: updatedEvent,
+      message: `Event ${status === 'published' ? 'veröffentlicht' : 'als Entwurf gespeichert'}`
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: 'Fehler beim Aktualisieren des Event-Status',
+      error: error.message
+    });
+  }
+});
+
+// Delete event
+app.delete('/api/events/:id', async (req, res) => {
+  try {
+    const deleted = await dataService.deleteEvent(req.params.id)
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        message: 'Event nicht gefunden'
+      })
+    }
+    res.json({
+      success: true,
+      message: 'Event erfolgreich gelöscht'
+    })
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Fehler beim Löschen des Events',
+      error: error.message
+    })
+  }
+})
+
+// User Management Endpoints
+
+// Get all persons
+app.get('/api/persons', async (req, res) => {
+  try {
+    const { year } = req.query;
+    const persons = await userService.getAllPersons(year ? parseInt(year) : null);
+    res.json({
+      success: true,
+      data: persons,
+      year: year || 'all'
+    })
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Fehler beim Laden der Personen',
+      error: error.message
+    })
+  }
+})
+
+// Get specific person by ID
+app.get('/api/persons/:id', async (req, res) => {
+  try {
+    const person = await userService.getPersonById(req.params.id)
+    if (!person) {
+      return res.status(404).json({
+        success: false,
+        message: 'Person nicht gefunden'
+      })
+    }
+    res.json({
+      success: true,
+      data: person
+    })
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Fehler beim Laden der Person',
+      error: error.message
+    })
+  }
+})
+
+// Create new person
+app.post('/api/persons', async (req, res) => {
+  try {
+    const newPerson = await userService.createPerson(req.body)
+    res.status(201).json({
+      success: true,
+      data: newPerson,
+      message: 'Person erfolgreich erstellt'
+    })
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: 'Fehler beim Erstellen der Person',
+      error: error.message
+    })
+  }
+})
+
+// Import persons from array (overwrites all existing persons)
+app.post('/api/persons/import', async (req, res) => {
+  try {
+    const { persons } = req.body;
+    
+    if (!persons || !Array.isArray(persons)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Import-Daten müssen ein Array von Personen enthalten'
+      });
+    }
+
+    const importedPersons = await userService.importPersons(persons);
+    
+    res.json({
+      success: true,
+      data: importedPersons,
+      message: `${importedPersons.length} Personen erfolgreich importiert`,
+      count: importedPersons.length
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: 'Fehler beim Importieren der Personen',
+      error: error.message
+    });
+  }
+})
+
+// Time Slot Management API Routes
+
+// Get all time slots for an event
+app.get('/api/events/:eventId/timeslots', async (req, res) => {
+  try {
+    const event = await dataService.getEventById(req.params.eventId)
+    if (!event) {
+      return res.status(404).json({
+        success: false,
+        message: 'Event nicht gefunden'
+      })
+    }
+    res.json({
+      success: true,
+      data: event.timeSlots || [],
+      eventId: event.id
+    })
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Fehler beim Laden der Time Slots',
+      error: error.message
+    })
+  }
+})
+
+// Add time slot to event
+app.post('/api/events/:eventId/timeslots', async (req, res) => {
+  try {
+    const timeSlot = await dataService.addTimeSlot(req.params.eventId, req.body)
+    if (!timeSlot) {
+      return res.status(404).json({
+        success: false,
+        message: 'Event nicht gefunden'
+      })
+    }
+    res.json({
+      success: true,
+      data: timeSlot,
+      message: 'Time Slot erfolgreich erstellt'
+    })
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: 'Fehler beim Erstellen des Time Slots',
+      error: error.message
+    })
+  }
+})
+
+// Update time slot
+app.put('/api/events/:eventId/timeslots/:timeSlotId', async (req, res) => {
+  try {
+    const timeSlot = await dataService.updateTimeSlot(req.params.eventId, req.params.timeSlotId, req.body)
+    if (!timeSlot) {
+      return res.status(404).json({
+        success: false,
+        message: 'Time Slot nicht gefunden'
+      })
+    }
+    res.json({
+      success: true,
+      data: timeSlot,
+      message: 'Time Slot erfolgreich aktualisiert'
+    })
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: 'Fehler beim Aktualisieren des Time Slots',
+      error: error.message
+    })
+  }
+})
+
+// Delete time slot
+app.delete('/api/events/:eventId/timeslots/:timeSlotId', async (req, res) => {
+  try {
+    const success = await dataService.deleteTimeSlot(req.params.eventId, req.params.timeSlotId)
+    if (!success) {
+      return res.status(404).json({
+        success: false,
+        message: 'Time Slot nicht gefunden'
+      })
+    }
+    res.json({
+      success: true,
+      message: 'Time Slot erfolgreich gelöscht'
+    })
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: 'Fehler beim Löschen des Time Slots',
+      error: error.message
+    })
+  }
+})
+
+// Get time slot participation
+app.get('/api/events/:eventId/timeslots/:timeSlotId/participation', async (req, res) => {
+  try {
+    const participation = await dataService.getTimeSlotParticipation(req.params.eventId, req.params.timeSlotId)
+    res.json({
+      success: true,
+      data: participation
+    })
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: 'Fehler beim Laden der Teilnahmedaten',
+      error: error.message
+    })
+  }
+})
+
+// Manage time slot participation
+app.post('/api/events/:eventId/timeslots/:timeSlotId/participation', async (req, res) => {
+  try {
+    const { personId, status } = req.body
+    
+    if (status === 'remove') {
+      const success = await dataService.removeTimeSlotParticipation(req.params.eventId, req.params.timeSlotId, personId)
+      if (success) {
+        res.json({
+          success: true,
+          message: 'Teilnahme erfolgreich entfernt'
+        })
+      } else {
+        res.status(404).json({
+          success: false,
+          message: 'Teilnahme nicht gefunden'
+        })
+      }
+    } else {
+      // Validate status - only 'accepted' is allowed, 'remove' is handled above
+      const validStatuses = ['accepted'];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: `Ungültiger Status. Erlaubte Werte: ${validStatuses.join(', ')}, oder 'remove' zum Entfernen`
+        });
+      }
+
+      const participation = await dataService.setTimeSlotParticipation(req.params.eventId, req.params.timeSlotId, personId, status)
+      if (participation) {
+        res.json({
+          success: true,
+          data: participation,
+          message: `Teilnahmestatus erfolgreich auf '${status}' gesetzt`
+        })
+      } else {
+        res.status(400).json({
+          success: false,
+          message: 'Fehler beim Setzen des Teilnahmestatus'
+        })
+      }
+    }
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: 'Fehler beim Verwalten der Teilnahme',
+      error: error.message
+    })
+  }
+})
+
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`)
+  console.log('API Endpoints:')
+  console.log('  Events:')
+  console.log('    GET    /api/events         - Alle Events abrufen')
+  console.log('    GET    /api/events/:id     - Einzelnes Event abrufen')
+  console.log('    POST   /api/events         - Neues Event erstellen')
+  console.log('    PUT    /api/events/:id     - Event aktualisieren')
+  console.log('    DELETE /api/events/:id     - Event löschen')
+  console.log('  Persons:')
+  console.log('    GET    /api/persons        - Alle Personen abrufen')
+  console.log('    GET    /api/persons/:id    - Einzelne Person abrufen')
+  console.log('    POST   /api/persons        - Neue Person erstellen')
+  console.log('  Zeitslots:')
+  console.log('    GET    /api/events/:eventId/timeslots                   - Zeitslots für Event abrufen')
+  console.log('    POST   /api/events/:eventId/timeslots                   - Zeitslot erstellen')
+  console.log('    PUT    /api/events/:eventId/timeslots/:timeSlotId      - Zeitslot aktualisieren')
+  console.log('    DELETE /api/events/:eventId/timeslots/:timeSlotId      - Zeitslot löschen')
+  console.log('  Zeitslot Teilnahme:')
+  console.log('    GET    /api/events/:eventId/timeslots/:timeSlotId/participation - Zeitslot Teilnahmedaten abrufen')
+  console.log('    POST   /api/events/:eventId/timeslots/:timeSlotId/participation - Zeitslot Teilnahme verwalten')
+})

@@ -1,0 +1,477 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { EventUtils } from './apiService';
+import ParticipantsTable from './ParticipantsTable';
+import './UserDashboard.css';
+
+const LOGO_URL = 'https://tse4.mm.bing.net/th/id/OIP.UORK-u3V7UVpyTeEcb0y_QHaHa?rs=1&pid=ImgDetMain&o=7&rm=3';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+
+const UserDashboard = ({ user, onLogout }) => {
+  const navigate = useNavigate();
+  const { userId, eventId } = useParams();
+  const location = useLocation();
+  const [events, setEvents] = useState([]);
+  const [timeSlotParticipation, setTimeSlotParticipation] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
+  useEffect(() => {
+    if (user && !user.isAdmin) {
+      fetchEvents();
+    }
+  }, [user]);
+
+  useEffect(() => {
+    // Load specific event when eventId is in URL
+    if (eventId && events.length > 0) {
+      console.log('Looking for eventId:', eventId, 'type:', typeof eventId);
+      console.log('Available events:', events.map(e => ({ id: e.id, type: typeof e.id, name: e.name })));
+      
+      // Try both string and number comparison since URL params are strings
+      const event = events.find(e => e.id == eventId || e.id === eventId || String(e.id) === String(eventId));
+      
+      if (event) {
+        console.log('Found event:', event);
+        setSelectedEvent(event);
+      } else {
+        console.log('Event not found with ID:', eventId);
+        setError('Event nicht gefunden');
+        navigate(`/user/${userId}`);
+      }
+    } else {
+      setSelectedEvent(null);
+    }
+  }, [eventId, events, userId, navigate]);
+
+  const fetchEvents = async () => {
+    try {
+      setLoading(true);
+      // Only fetch published events for regular users
+      const eventsResponse = await fetch(`${API_BASE_URL}/api/events?status=published`);
+      const eventsResult = await eventsResponse.json();
+      
+      if (eventsResult.success) {
+        setEvents(eventsResult.data);
+        await fetchTimeSlotParticipation(eventsResult.data);
+      } else {
+        setError('Fehler beim Laden der Events');
+      }
+    } catch (error) {
+      setError('Verbindungsfehler');
+      console.error('Error fetching events:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchTimeSlotParticipation = async (eventsList) => {
+    const timeSlotParticipationData = [];
+    
+    for (const event of eventsList) {
+      try {
+        // First get the timeslots for this event
+        const timeSlotsResponse = await fetch(`${API_BASE_URL}/api/events/${event.id}/timeslots`);
+        const timeSlotsResult = await timeSlotsResponse.json();
+        
+        if (timeSlotsResult.success && timeSlotsResult.data.length > 0) {
+          // For each timeslot, get participation data
+          for (const timeSlot of timeSlotsResult.data) {
+            try {
+              const participationResponse = await fetch(`${API_BASE_URL}/api/events/${event.id}/timeslots/${timeSlot.id}/participation`);
+              const participationResult = await participationResponse.json();
+              
+              if (participationResult.success) {
+                const myParticipation = participationResult.data.find(p => p.person.id === user.id);
+                
+                // Add all participants data to the timeslot object
+                timeSlot.participants = participationResult.data;
+                
+                timeSlotParticipationData.push({
+                  eventId: event.id,
+                  timeSlotId: timeSlot.id,
+                  timeSlot: timeSlot,
+                  participation: myParticipation || { status: 'not_responded' }
+                });
+              }
+            } catch (error) {
+              console.error(`Error fetching participation for timeslot ${timeSlot.id}:`, error);
+              timeSlotParticipationData.push({
+                eventId: event.id,
+                timeSlotId: timeSlot.id,
+                timeSlot: timeSlot,
+                participation: { status: 'not_responded' }
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Error fetching timeslots for event ${event.id}:`, error);
+      }
+    }
+    
+    setTimeSlotParticipation(timeSlotParticipationData);
+  };
+
+  const updateTimeSlotParticipation = async (eventId, timeSlotId, status) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/events/${eventId}/timeslots/${timeSlotId}/participation`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          personId: user.id,
+          status: status
+        })
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        await fetchTimeSlotParticipation(events);
+        setError('');
+      } else {
+        setError(result.message || 'Fehler beim Aktualisieren der Zeitslot-Teilnahme');
+      }
+    } catch (error) {
+      setError('Verbindungsfehler');
+      console.error('Error updating timeslot participation:', error);
+    }
+  };
+
+  const getTimeSlotParticipation = (eventId, timeSlotId) => {
+    const participation = timeSlotParticipation.find(
+      p => p.eventId === eventId && p.timeSlotId === timeSlotId
+    );
+    return participation ? participation.participation : { status: 'not_responded' };
+  };
+
+  const getTimeSlotsForEvent = (eventId) => {
+    return timeSlotParticipation
+      .filter(p => p.eventId === eventId)
+      .map(p => p.timeSlot);
+  };
+
+  const handleEventClick = (event) => {
+    if (!event || !event.id) {
+      setError('Event nicht gefunden');
+      return;
+    }
+    console.log('Clicking event:', event.id, 'type:', typeof event.id);
+    navigate(`/user/${userId}/events/${event.id}`);
+  };
+
+  const handleBackToList = () => {
+    navigate(`/user/${userId}`);
+  };
+
+  const handleLogout = () => {
+    navigate('/');
+  };
+
+  const getAvailableYears = () => {
+    const currentYear = new Date().getFullYear();
+    return [currentYear + 1, currentYear, currentYear - 1, currentYear - 2]; // Nächstes Jahr, Dieses Jahr, Letztes Jahr, Vorletztes Jahr
+  };
+
+  const getFilteredEvents = () => {
+    return events.filter(event => {
+      const eventYear = new Date(event.dateFrom).getFullYear();
+      return eventYear === selectedYear;
+    });
+  };
+
+  // Determine current view based on URL
+  const getCurrentView = () => {
+    return eventId ? 'details' : 'list';
+  };
+
+  const currentView = getCurrentView();
+
+  // If an event is selected (URL has eventId), show the detail view
+  if (currentView === 'details') {
+    if (!selectedEvent && !loading) {
+      return (
+        <div className="user-dashboard-background">
+          <div className="user-dashboard">
+            <div className="dashboard-header">
+              <div className="user-info">
+                <img src={LOGO_URL} alt="RK Schmalegg Logo" className="header-logo" />
+                <h1>Willkommen, {user.fullName}!</h1>
+              </div>
+              <button className="logout-button" onClick={handleLogout}>
+                Abmelden
+              </button>
+            </div>
+            <div className="error-message">
+              Event nicht gefunden
+              <button className="back-button" onClick={handleBackToList}>
+                ← Zurück zur Übersicht
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (!selectedEvent && loading) {
+      return (
+        <div className="user-dashboard-background">
+          <div className="user-dashboard">
+            <div className="dashboard-header">
+              <div className="user-info">
+                <img src={LOGO_URL} alt="RK Schmalegg Logo" className="header-logo" />
+                <h1>Willkommen, {user.fullName}!</h1>
+              </div>
+              <button className="logout-button" onClick={handleLogout}>
+                Abmelden
+              </button>
+            </div>
+            <div>Event wird geladen...</div>
+          </div>
+        </div>
+      );
+    }
+
+    const eventTimeSlots = getTimeSlotsForEvent(selectedEvent.id);
+    
+    return (
+      <div className="user-dashboard-background">
+        <div className="user-dashboard">
+        <div className="dashboard-header">
+          <div className="user-info">
+            <img src={LOGO_URL} alt="RK Schmalegg Logo" className="header-logo" />
+            <h1>Willkommen, {user.fullName}!</h1>
+          </div>
+          <button className="logout-button" onClick={handleLogout}>
+            Abmelden
+          </button>
+        </div>
+
+        {error && <div className="error-message">{error}</div>}
+
+        <div className="event-details-container">
+          <button className="back-button" onClick={handleBackToList}>
+            ← Zurück zur Übersicht
+          </button>
+
+          <div className="event-card-detail">
+            <h2>{selectedEvent.name}</h2>
+            <div className="event-info">
+              <div className="event-date">
+                📅 {EventUtils.getDateRange(selectedEvent.dateFrom, selectedEvent.dateTo)}
+              </div>
+              <div className="event-location">
+                📍 {selectedEvent.location}
+              </div>
+              <div className="event-description">
+                {selectedEvent.description}
+              </div>
+            </div>
+          </div>
+
+          {/* Zeitslots zum Anmelden */}
+          {eventTimeSlots.length > 0 && (
+            <div className="timeslots-signup-section">
+              {(() => {
+                // First group by date, then by category
+                const groupedByDate = eventTimeSlots.reduce((acc, timeSlot) => {
+                  const date = timeSlot.date || 'Alle Tage';
+                  if (!acc[date]) {
+                    acc[date] = {};
+                  }
+                  const category = timeSlot.category || 'Ohne Kategorie';
+                  if (!acc[date][category]) {
+                    acc[date][category] = [];
+                  }
+                  acc[date][category].push(timeSlot);
+                  return acc;
+                }, {});
+
+                // Sort dates ("Alle Tage" first, then chronologically)
+                const sortedDates = Object.keys(groupedByDate).sort((a, b) => {
+                  if (a === 'Alle Tage') return -1;
+                  if (b === 'Alle Tage') return 1;
+                  return a.localeCompare(b);
+                });
+
+                return sortedDates.map(date => {
+                  const categories = groupedByDate[date];
+                  const sortedCategories = Object.keys(categories).sort();
+
+                  return (
+                    <div key={date} className="timeslot-date-section">
+                      <h3 className="date-header">
+                        {date === 'Alle Tage' ? date : new Date(date).toLocaleDateString('de-DE', { 
+                          weekday: 'long', 
+                          year: 'numeric', 
+                          month: 'long', 
+                          day: 'numeric' 
+                        })}
+                      </h3>
+                      
+                      {sortedCategories.map(category => {
+                        const slots = categories[category];
+                        
+                        // Sort slots by time within each category
+                        const sortedSlots = slots.sort((a, b) => {
+                          return a.timeFrom.localeCompare(b.timeFrom);
+                        });
+                        
+                        return (
+                          <div key={category} className="timeslot-category-section">
+                            <h4 className="category-header">{category}</h4>
+                            <div className="timeslots-grid">
+                              {sortedSlots.map((timeSlot) => {
+                                const timeSlotParticipation = getTimeSlotParticipation(selectedEvent.id, timeSlot.id);
+                                const isSignedUp = timeSlotParticipation.status === 'accepted';
+                                const isFull = timeSlot.isFull;
+                                const availableSpots = timeSlot.availableSpots;
+                                
+                                return (
+                                  <div key={timeSlot.id} className={`timeslot-card ${isSignedUp ? 'signed-up' : ''} ${isFull && !isSignedUp ? 'full' : ''}`}>
+                                    <div className="timeslot-header">
+                                      <h5>{timeSlot.name}</h5>
+                                      <span className="timeslot-time">
+                                        {timeSlot.timeFrom} - {timeSlot.timeTo}
+                                      </span>
+                                    </div>
+                                    
+                                    <div className="timeslot-info">
+                                      <div className="capacity-info">
+                                        {timeSlot.maxParticipants > 0 && (
+                                          <span className={`capacity ${isFull ? 'full' : ''}`}>
+                                            {timeSlot.maxParticipants - availableSpots}/{timeSlot.maxParticipants} Plätze
+                                          </span>
+                                        )}
+                                      </div>
+                                      
+                                      <div className="timeslot-status">
+                                        {isSignedUp ? (
+                                          <span className="status-signed-up">✓ Angemeldet</span>
+                                        ) : isFull ? (
+                                          <span className="status-full">Ausgebucht</span>
+                                        ) : (
+                                          <span className="status-available">Verfügbar</span>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="timeslot-actions">
+                                      {isSignedUp ? (
+                                        <button 
+                                          className="btn-timeslot-cancel"
+                                          onClick={() => updateTimeSlotParticipation(selectedEvent.id, timeSlot.id, 'remove')}
+                                        >
+                                          Abmelden
+                                        </button>
+                              ) : !isFull ? (
+                                        <button 
+                                          className="btn-timeslot-signup"
+                                          onClick={() => updateTimeSlotParticipation(selectedEvent.id, timeSlot.id, 'accepted')}
+                                        >
+                                          Anmelden
+                                        </button>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          )}
+
+          {/* Participants Overview Table */}
+          {eventTimeSlots.length > 0 && (
+            <ParticipantsTable 
+              timeSlots={eventTimeSlots} 
+              dateFrom={selectedEvent.dateFrom} 
+            />
+          )}
+        </div>
+      </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="user-dashboard-background">
+        <div className="user-dashboard">
+          <div className="dashboard-header">
+            <h1>Lade Dashboard...</h1>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="user-dashboard-background">
+      <div className="user-dashboard">
+        <div className="dashboard-header">
+          <div className="user-info">
+            <img src={LOGO_URL} alt="RK Schmalegg Logo" className="header-logo" />
+            <h1>Willkommen, {user.fullName}!</h1>
+          </div>
+          <button className="logout-button" onClick={handleLogout}>
+            Abmelden
+          </button>
+        </div>
+
+        {error && <div className="error-message">{error}</div>}
+
+        {/* Year Filter */}
+        <div className="year-filter-section">
+          <label htmlFor="user-year-select">Jahr:</label>
+          <select 
+            id="user-year-select"
+            value={selectedYear} 
+            onChange={(e) => setSelectedYear(Number(e.target.value))}
+            className="year-select"
+          >
+            {getAvailableYears().map(year => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="events-grid">
+          {getFilteredEvents().map((event) => {
+            return (
+              <div key={event.id} className="event-card" onClick={() => handleEventClick(event)}>
+                <div className="event-header">
+                  <h3>{event.name}</h3>
+                </div>
+                
+                <div className="event-details">
+                  <div className="event-date">
+                    📅 {EventUtils.getDateRange(event.dateFrom, event.dateTo)}
+                  </div>
+                  <div className="event-location">
+                    📍 {event.location}
+                  </div>
+                  <div className="event-description">
+                    {event.description}
+                  </div>
+                </div>
+              </div>
+            );
+        })}
+      </div>
+    </div>
+    </div>
+  );
+};
+
+export default UserDashboard;
