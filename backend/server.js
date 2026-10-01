@@ -56,13 +56,24 @@ app.post('/api/auth/register', authRateLimit, requireAuthConfiguration, async (r
       })
     }
     const { data, error } = await authClient.auth.signUp({ email, password })
-    if (error) {
-      console.error('Registrierung fehlgeschlagen:', error.message)
-      return res.status(400).json({
-        success: false,
-        message: 'Registrierung nicht möglich. Prüfen Sie die Eingaben und die E-Mail-Konfiguration.',
-      })
-    }
+        if (error) {
+          console.error('Registrierung fehlgeschlagen:', error)
+
+          let message = 'Registrierung nicht möglich.'
+
+          if (error.code === 'user_already_exists' || error.code === 'email_exists') {
+            message = 'Für diese E-Mail-Adresse existiert bereits ein Konto. Bitte melden Sie sich an.'
+          } else if (error.code === 'weak_password') {
+            message = 'Das Passwort erfüllt die Sicherheitsanforderungen nicht.'
+          } else if (error.code === 'email_provider_disabled') {
+            message = 'Die Registrierung per E-Mail ist in Supabase deaktiviert.'
+          }
+
+          return res.status(400).json({
+            success: false,
+            message,
+          })
+        }
     res.status(201).json({
     success: true,
     data: {
