@@ -110,25 +110,7 @@ const AdminPage = () => {
       const response = await apiService.getAllEvents();
       
       if (response.success) {
-        // === CATEGORY UPDATE START: COLLECT CATEGORIES FROM ALL EVENTS ===
-        const categorySet = new Set();
-        response.data.forEach(event => {
-          (Array.isArray(event.categories) ? event.categories : []).forEach(category => {
-            const value = String(category || '').trim();
-            if (value) categorySet.add(value);
-          });
-
-          (event.timeSlots || []).forEach(slot => {
-            const value = String(slot.category || '').trim();
-            if (value) categorySet.add(value);
-          });
-        });
-
-        setAvailableCategories(
-          [...categorySet].sort((a, b) => a.localeCompare(b, 'de'))
-        );
-        // === CATEGORY UPDATE END: COLLECT CATEGORIES FROM ALL EVENTS ===
-
+        
         // Filter events by selected year
         const filteredEvents = response.data.filter(event => {
           if (event.dateFrom) {
@@ -321,28 +303,32 @@ const AdminPage = () => {
   }
 
   if (currentView === 'details') {
-    if (!selectedEvent) {
-      return (
-        <>
-          <header className="App-header">
-            <div className="header-content">
-              <div className="header-title-with-logo">
-                <img src={LOGO_URL} alt="RK Schmalegg Logo" className="header-logo" />
-                <h1>Eventmanager RK Schmalegg</h1>
-              </div>
+    // === EVENT LOADING FIX START: PREVENT FALSE "EVENT NOT FOUND" FLASH ===
+  if (!selectedEvent) {
+    return (
+      <>
+        <header className="App-header">
+          <div className="header-content">
+            <div className="header-title-with-logo">
+              <img
+                src={LOGO_URL}
+                alt="RK Schmalegg Logo"
+                className="header-logo"
+              />
+              <h1>Eventmanager RK Schmalegg</h1>
             </div>
-          </header>
-          <main className="App-main">
-            <div className="error-message">
-              Event nicht gefunden
-            </div>
-            <button onClick={handleBackToList} className="back-button">
-              ← Zurück zur Übersicht
-            </button>
-          </main>
-        </>
-      );
-    }
+          </div>
+        </header>
+
+        <main className="App-main">
+          <div className="loading-message">
+            Event wird geladen...
+          </div>
+        </main>
+      </>
+    );
+  }
+// === EVENT LOADING FIX END: PREVENT FALSE "EVENT NOT FOUND" FLASH ===
 
     return (
       <>
@@ -382,8 +368,8 @@ const AdminPage = () => {
             </div>
           </header>
           <main className="App-main">
-            <div className="error-message">
-              Event nicht gefunden
+            <div className="loading-message">
+              Event wird geladen...
             </div>
             <button onClick={handleBackToList} className="back-button">
               ← Zurück zur Übersicht
