@@ -47,8 +47,17 @@ function normalizeEventCategories(categories = []) {
     normalized.map(category => [category.toLocaleLowerCase('de'), category])
   ).values()].sort((a, b) => a.localeCompare(b, 'de'));
 }
-// === CATEGORY UPDATE END: EVENT CATEGORY NORMALIZATION ===
+// === CATEGORY FIX START: MAP EVENT CATEGORIES SAFELY ===
 function rowToEvent(row) {
+  const timeSlots = (row.time_slots || []).map(rowToTimeSlot);
+
+  // Kategorien des Events laden und zur Abwärtskompatibilität
+  // vorhandene Kategorien aus älteren Zeitslots ergänzen.
+  const categories = normalizeEventCategories([
+    ...(Array.isArray(row.categories) ? row.categories : []),
+    ...timeSlots.map(slot => slot.category),
+  ]);
+
   return {
     id: Number(row.id),
     name: row.name,
@@ -61,9 +70,10 @@ function rowToEvent(row) {
     status: row.status,
     categories,
     participants: [],
-    timeSlots: (row.time_slots || []).map(rowToTimeSlot),
+    timeSlots,
   };
 }
+// === CATEGORY FIX END: MAP EVENT CATEGORIES SAFELY ===
 
 const eventSelect = `
   id, name, description, date_from, date_to, time_from, time_to, location, status,
