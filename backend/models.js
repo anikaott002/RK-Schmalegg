@@ -144,6 +144,7 @@ export class Event {
     timeFrom,
     timeTo,
     location,
+    categories = [],
     participants = [], // Array of Participant objects
     timeSlots = [], // Array of TimeSlot objects
     status = 'draft' // 'draft' or 'published'
@@ -156,6 +157,7 @@ export class Event {
     this.timeFrom = timeFrom; // Time string (e.g., "09:00")
     this.timeTo = timeTo;     // Time string (e.g., "17:00")
     this.location = location;
+    this.categories = categories;
     this.participants = participants; // Array of Participant objects
     this.timeSlots = timeSlots; // Array of TimeSlot objects
     this.status = status; // 'draft' or 'published'
@@ -254,6 +256,7 @@ export class Event {
       timeFrom: this.timeFrom,
       timeTo: this.timeTo,
       location: this.location,
+      categories: this.categories,
       status: this.status,
       participants: this.participants.map(p => p.toJSON()),
       timeSlots: this.timeSlots.map(ts => ts.toJSON())

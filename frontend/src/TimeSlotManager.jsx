@@ -193,11 +193,16 @@ const TimeSlotManager = ({ event, onBack, onUpdate, selectedTimeSlot, initialSho
   }
 
   if (showForm) {
-    // Calculate existing categories from current time slots
-    const existingCategories = [...new Set(timeSlots
-      .map(slot => slot.category)
-      .filter(category => category && category.trim())
-    )].sort();
+    // === CATEGORY UPDATE START: USE EVENT CATEGORIES ===
+    // Kategorien gehören jetzt zum Event und können unabhängig von Zeitslots existieren.
+    // Legacy-Kategorien aus bestehenden Zeitslots werden zusätzlich berücksichtigt.
+    const existingCategories = [...new Set([
+      ...(Array.isArray(event.categories) ? event.categories : []),
+      ...timeSlots.map(slot => slot.category),
+    ]
+      .map(category => String(category || '').trim())
+      .filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
+    // === CATEGORY UPDATE END: USE EVENT CATEGORIES ===
 
     return (
       <div className="timeslot-manager">

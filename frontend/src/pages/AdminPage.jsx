@@ -26,6 +26,8 @@ const AdminPage = () => {
   const [error, setError] = useState(null);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
+  const [availableCategories, setAvailableCategories] = useState([]);
+
   // Determine current view based on URL path
   const getCurrentView = () => {
     const path = location.pathname;
@@ -108,6 +110,25 @@ const AdminPage = () => {
       const response = await apiService.getAllEvents();
       
       if (response.success) {
+        // === CATEGORY UPDATE START: COLLECT CATEGORIES FROM ALL EVENTS ===
+        const categorySet = new Set();
+        response.data.forEach(event => {
+          (Array.isArray(event.categories) ? event.categories : []).forEach(category => {
+            const value = String(category || '').trim();
+            if (value) categorySet.add(value);
+          });
+
+          (event.timeSlots || []).forEach(slot => {
+            const value = String(slot.category || '').trim();
+            if (value) categorySet.add(value);
+          });
+        });
+
+        setAvailableCategories(
+          [...categorySet].sort((a, b) => a.localeCompare(b, 'de'))
+        );
+        // === CATEGORY UPDATE END: COLLECT CATEGORIES FROM ALL EVENTS ===
+
         // Filter events by selected year
         const filteredEvents = response.data.filter(event => {
           if (event.dateFrom) {

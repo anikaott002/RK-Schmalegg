@@ -55,6 +55,17 @@ const TimeSlotForm = ({ onSave, onCancel, timeSlot, isEditing = false, presetCat
   const validateForm = () => {
     const newErrors = {};
 
+    // === CATEGORY UPDATE START: CATEGORY IS REQUIRED ===
+    if (!String(category || '').trim()) {
+      newErrors.category = 'Kategorie ist erforderlich';
+    } else if (
+      existingCategories.length > 0 &&
+      !existingCategories.includes(String(category).trim())
+    ) {
+      newErrors.category = 'Bitte eine dem Event zugeordnete Kategorie auswählen';
+    }
+    // === CATEGORY UPDATE END: CATEGORY IS REQUIRED ===
+
     timeSlots.forEach((slot, index) => {
       if (!slot.name.trim()) {
         newErrors[`${index}-name`] = 'Name ist erforderlich';
@@ -177,38 +188,45 @@ const TimeSlotForm = ({ onSave, onCancel, timeSlot, isEditing = false, presetCat
       </div>
 
       <div className="timeslot-form">
+        {/* === CATEGORY UPDATE START: SELECT EVENT CATEGORY === */}
         <div className="form-group">
-          <label htmlFor="category">Kategorie {isEditing ? '' : '*'}</label>
-          <input
-            type="text"
-            id="category"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            placeholder="z.B. Parcour, Putzen, Aufbau"
-            readOnly={presetCategory && !isEditing}
-            className={presetCategory && !isEditing ? 'readonly-input' : ''}
-            list="category-suggestions"
-          />
-          {existingCategories.length > 0 && (
-            <datalist id="category-suggestions">
-              {existingCategories.map((cat, index) => (
-                <option key={index} value={cat} />
+          <label htmlFor="category">Kategorie *</label>
+
+          {existingCategories.length > 0 ? (
+            <select
+              id="category"
+              value={category}
+              onChange={(e) => {
+                setCategory(e.target.value);
+                if (errors.category) {
+                  setErrors(prev => ({ ...prev, category: '' }));
+                }
+              }}
+              disabled={Boolean(presetCategory && !isEditing)}
+              className={errors.category ? 'error' : ''}
+            >
+              <option value="">Kategorie auswählen</option>
+              {existingCategories.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
               ))}
-            </datalist>
+            </select>
+          ) : (
+            <div className="category-required-hint">
+              Für dieses Event ist noch keine Kategorie angelegt. Bitte gehe zurück und lege zuerst im Event mindestens eine Kategorie an.
+            </div>
           )}
+
+          {errors.category && <span className="error-text">{errors.category}</span>}
+
           {presetCategory && !isEditing && (
-            <span className="helper-text">Zeitslots werden zur Kategorie "{presetCategory}" hinzugefügt</span>
+            <span className="helper-text">Zeitslots werden zur Kategorie „{presetCategory}“ hinzugefügt.</span>
           )}
-          {!presetCategory && !isEditing && (
-            <span className="helper-text">Alle Zeitslots werden dieser Kategorie zugeordnet. Zeitslots mit gleicher Kategorie und gleichem Datum werden automatisch zusammengefasst.</span>
-          )}
-          {isEditing && existingCategories.length > 0 && (
-            <span className="helper-text">Wähle eine bestehende Kategorie oder erstelle eine neue</span>
-          )}
-          {isEditing && existingCategories.length === 0 && (
-            <span className="helper-text">Kategorie kann geändert werden</span>
+
+          {!presetCategory && existingCategories.length > 0 && (
+            <span className="helper-text">Wähle eine der Kategorien, die dem Event zugeordnet wurden.</span>
           )}
         </div>
+        {/* === CATEGORY UPDATE END: SELECT EVENT CATEGORY === */}
 
         <div className="timeslots-container">
           {timeSlots.map((slot, index) => (
@@ -310,7 +328,12 @@ const TimeSlotForm = ({ onSave, onCancel, timeSlot, isEditing = false, presetCat
         )}
 
         <div className="form-actions">
-          <button type="button" className="btn-primary" onClick={handleSubmit}>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={handleSubmit}
+            disabled={existingCategories.length === 0}
+          >
             {isEditing ? 'Aktualisieren' : `${timeSlots.length} Zeitslot${timeSlots.length > 1 ? 's' : ''} speichern`}
           </button>
           <button type="button" className="btn-secondary" onClick={onCancel}>

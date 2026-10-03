@@ -204,3 +204,32 @@
     width: 100%;
   }
 }
+/* === CATEGORY UPDATE START: CATEGORY SELECT === */
+.timeslot-form .form-group select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid #ddd;
+  border-radius: 6px;
+  font-size: 1em;
+  background: white;
+  box-sizing: border-box;
+}
+
+.timeslot-form .form-group select:focus {
+  outline: none;
+  border-color: #f6ce38;
+}
+
+.timeslot-form .form-group select.error {
+  border-color: #f44336;
+}
+
+.category-required-hint {
+  padding: 12px;
+  border: 1px solid #f0c36d;
+  border-radius: 6px;
+  background: #fff8e5;
+  color: #6b5311;
+  line-height: 1.4;
+}
+/* === CATEGORY UPDATE END: CATEGORY SELECT === */

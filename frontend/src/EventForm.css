@@ -382,3 +382,137 @@
     justify-content: flex-end;
   }
 }
+
+
+/* === CATEGORY UPDATE START: EVENT CATEGORY MANAGEMENT === */
+.categories-section {
+  margin-top: 30px;
+  padding: 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #fffdf5;
+}
+
+.categories-header h3 {
+  margin: 0 0 6px 0;
+  color: #282c34;
+}
+
+.categories-header p {
+  margin: 0 0 18px 0;
+  color: #666;
+  font-size: 0.92em;
+  line-height: 1.45;
+}
+
+.category-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.category-control-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.category-control-row input,
+.category-control-row select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid #ddd;
+  border-radius: 6px;
+  font-size: 1em;
+  background: white;
+  box-sizing: border-box;
+}
+
+.category-control-row input:focus,
+.category-control-row select:focus {
+  outline: none;
+  border-color: #f6ce38;
+}
+
+.category-add-button {
+  background: #f6ce38;
+  color: #333;
+  border: 2px solid #e6be28;
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.category-add-button:hover:not(:disabled) {
+  background: #e6be28;
+}
+
+.category-add-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.category-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #888;
+  font-size: 0.85em;
+}
+
+.category-divider::before,
+.category-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #e0e0e0;
+}
+
+.category-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.category-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: #f6ce38;
+  border: 1px solid #e6be28;
+  border-radius: 999px;
+  color: #333;
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+.category-chip button {
+  border: none;
+  background: transparent;
+  color: #333;
+  cursor: pointer;
+  font-size: 1.2em;
+  line-height: 1;
+  padding: 0;
+}
+
+.add-timeslot-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .category-control-row {
+    grid-template-columns: 1fr;
+  }
+
+  .category-add-button {
+    width: 100%;
+  }
+}
+/* === CATEGORY UPDATE END: EVENT CATEGORY MANAGEMENT === */
+

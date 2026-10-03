@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import TimeSlotForm from './TimeSlotForm';
 import './EventForm.css';
 
-const EventForm = ({ event, onSave, onCancel, isEditing = false }) => {
+const EventForm = ({ event, onSave, onCancel, isEditing = false, availableCategories = [] }) => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -12,6 +12,13 @@ const EventForm = ({ event, onSave, onCancel, isEditing = false }) => {
   });
 
   const [timeSlots, setTimeSlots] = useState([]);
+
+  // === CATEGORY UPDATE START: EVENT CATEGORIES ===
+  const [categories, setCategories] = useState([]);
+  const [selectedExistingCategory, setSelectedExistingCategory] = useState('');
+  const [newCategory, setNewCategory] = useState('');
+  // === CATEGORY UPDATE END: EVENT CATEGORIES ===
+
   const [errors, setErrors] = useState({});
   const [showTimeSlotForm, setShowTimeSlotForm] = useState(false);
   const [editingTimeSlotIndex, setEditingTimeSlotIndex] = useState(null);
@@ -28,7 +35,20 @@ const EventForm = ({ event, onSave, onCancel, isEditing = false }) => {
       });
       
       // Load existing time slots
-      setTimeSlots(event.timeSlots || []);
+      const existingTimeSlots = event.timeSlots || [];
+      setTimeSlots(existingTimeSlots);
+
+      // === CATEGORY UPDATE START: LOAD EVENT CATEGORIES ===
+      // Backwards compatible: old events may only have categories on their time slots.
+      const loadedCategories = [...new Set([
+        ...(Array.isArray(event.categories) ? event.categories : []),
+        ...existingTimeSlots.map(slot => slot.category),
+      ]
+        .map(category => String(category || '').trim())
+        .filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
+
+      setCategories(loadedCategories);
+      // === CATEGORY UPDATE END: LOAD EVENT CATEGORIES ===
     }
   }, [isEditing, event]);
 
@@ -48,6 +68,49 @@ const EventForm = ({ event, onSave, onCancel, isEditing = false }) => {
     }
   };
 
+
+  // === CATEGORY UPDATE START: ADD / REMOVE CATEGORIES ===
+  const addCategory = (rawCategory) => {
+    const value = String(rawCategory || '').trim();
+    if (!value) return;
+
+    const alreadyExists = categories.some(
+      category => category.toLocaleLowerCase('de') === value.toLocaleLowerCase('de')
+    );
+
+    if (!alreadyExists) {
+      setCategories(prev => [...prev, value].sort((a, b) => a.localeCompare(b, 'de')));
+    }
+
+    setSelectedExistingCategory('');
+    setNewCategory('');
+    setErrors(prev => ({ ...prev, categories: '' }));
+  };
+
+  const removeCategory = (categoryToRemove) => {
+    const categoryIsUsed = timeSlots.some(
+      slot => String(slot.category || '').trim() === categoryToRemove
+    );
+
+    if (categoryIsUsed) {
+      setErrors(prev => ({
+        ...prev,
+        categories: `Die Kategorie „${categoryToRemove}“ wird noch von einem Zeitslot verwendet. Entferne oder ändere zuerst diesen Zeitslot.`
+      }));
+      return;
+    }
+
+    setCategories(prev => prev.filter(category => category !== categoryToRemove));
+    setErrors(prev => ({ ...prev, categories: '' }));
+  };
+
+  const reusableCategories = availableCategories.filter(
+    option => !categories.some(
+      category => category.toLocaleLowerCase('de') === String(option).toLocaleLowerCase('de')
+    )
+  );
+  // === CATEGORY UPDATE END: ADD / REMOVE CATEGORIES ===
+
   const validateForm = () => {
     const newErrors = {};
 
@@ -55,6 +118,21 @@ const EventForm = ({ event, onSave, onCancel, isEditing = false }) => {
     if (!formData.description.trim()) newErrors.description = 'Beschreibung ist erforderlich';
     if (!formData.dateFrom) newErrors.dateFrom = 'Startdatum ist erforderlich';
     if (!formData.location.trim()) newErrors.location = 'Ort ist erforderlich';
+
+    // === CATEGORY UPDATE START: REQUIRED CATEGORY VALIDATION ===
+    if (categories.length === 0) {
+      newErrors.categories = 'Mindestens eine Kategorie ist erforderlich';
+    }
+
+    timeSlots.forEach((timeSlot, index) => {
+      const category = String(timeSlot.category || '').trim();
+      if (!category) {
+        newErrors[`timeSlot_${index}_category`] = 'Kategorie ist erforderlich';
+      } else if (!categories.includes(category)) {
+        newErrors[`timeSlot_${index}_category`] = `Die Kategorie „${category}“ ist dem Event nicht zugeordnet`;
+      }
+    });
+    // === CATEGORY UPDATE END: REQUIRED CATEGORY VALIDATION ===
 
     // If dateTo is not provided, use dateFrom
     if (!formData.dateTo) {
@@ -177,6 +255,9 @@ const EventForm = ({ event, onSave, onCancel, isEditing = false }) => {
       const eventData = {
         ...formData,
         dateTo: formData.dateTo || formData.dateFrom,
+        // === CATEGORY UPDATE START: SAVE EVENT CATEGORIES ===
+        categories,
+        // === CATEGORY UPDATE END: SAVE EVENT CATEGORIES ===
         timeSlots: cleanedTimeSlots,
         // Preserve existing participants when editing, start with empty array when creating
         participants: isEditing ? (event.participants || []) : [],
@@ -204,6 +285,9 @@ const EventForm = ({ event, onSave, onCancel, isEditing = false }) => {
       const eventData = {
         ...formData,
         dateTo: formData.dateTo || formData.dateFrom,
+        // === CATEGORY UPDATE START: SAVE EVENT CATEGORIES ===
+        categories,
+        // === CATEGORY UPDATE END: SAVE EVENT CATEGORIES ===
         timeSlots: cleanedTimeSlots,
         participants: isEditing ? (event.participants || []) : [],
         status: status
@@ -291,6 +375,88 @@ const EventForm = ({ event, onSave, onCancel, isEditing = false }) => {
           {errors.location && <span className="error-text">{errors.location}</span>}
         </div>
 
+        {/* === CATEGORY UPDATE START: EVENT CATEGORY MANAGEMENT === */}
+        <div className="categories-section">
+          <div className="categories-header">
+            <div>
+              <h3>Kategorien *</h3>
+              <p>Mindestens eine Kategorie ist erforderlich. Du kannst eine bereits verwendete Kategorie übernehmen oder eine neue anlegen.</p>
+            </div>
+          </div>
+
+          <div className="category-controls">
+            <div className="category-control-row">
+              <select
+                value={selectedExistingCategory}
+                onChange={(e) => setSelectedExistingCategory(e.target.value)}
+                disabled={reusableCategories.length === 0}
+              >
+                <option value="">
+                  {reusableCategories.length > 0 ? 'Vorhandene Kategorie auswählen' : 'Keine weiteren vorhandenen Kategorien'}
+                </option>
+                {reusableCategories.map(category => (
+                  <option key={category} value={category}>{category}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="category-add-button"
+                onClick={() => addCategory(selectedExistingCategory)}
+                disabled={!selectedExistingCategory}
+              >
+                Übernehmen
+              </button>
+            </div>
+
+            <div className="category-divider"><span>oder</span></div>
+
+            <div className="category-control-row">
+              <input
+                type="text"
+                value={newCategory}
+                onChange={(e) => setNewCategory(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addCategory(newCategory);
+                  }
+                }}
+                placeholder="Neue Kategorie, z.B. Aufbau"
+                maxLength={80}
+              />
+              <button
+                type="button"
+                className="category-add-button"
+                onClick={() => addCategory(newCategory)}
+                disabled={!newCategory.trim()}
+              >
+                + Neue Kategorie
+              </button>
+            </div>
+          </div>
+
+          {categories.length > 0 && (
+            <div className="category-chips">
+              {categories.map(category => (
+                <span className="category-chip" key={category}>
+                  {category}
+                  <button
+                    type="button"
+                    onClick={() => removeCategory(category)}
+                    aria-label={`Kategorie ${category} entfernen`}
+                    title="Kategorie entfernen"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {errors.categories && <span className="error-text">{errors.categories}</span>}
+        </div>
+        {/* === CATEGORY UPDATE END: EVENT CATEGORY MANAGEMENT === */}
+
         {/* Zeitslots Section */}
         <div className="timeslots-section">
           <div className="timeslots-header">
@@ -299,6 +465,8 @@ const EventForm = ({ event, onSave, onCancel, isEditing = false }) => {
               type="button" 
               className="add-timeslot-button"
               onClick={() => setShowTimeSlotForm(true)}
+              disabled={categories.length === 0}
+              title={categories.length === 0 ? 'Lege zuerst mindestens eine Kategorie an' : 'Zeitslot hinzufügen'}
             >
               + Zeitslot hinzufügen
             </button>
@@ -319,6 +487,9 @@ const EventForm = ({ event, onSave, onCancel, isEditing = false }) => {
                     <div className="timeslot-capacity">
                       Max: {timeSlot.maxParticipants} Teilnehmer
                     </div>
+                    {errors[`timeSlot_${index}_category`] && (
+                      <span className="error-text">{errors[`timeSlot_${index}_category`]}</span>
+                    )}
                   </div>
                   <div className="timeslot-actions">
                     <button 
@@ -359,11 +530,11 @@ const EventForm = ({ event, onSave, onCancel, isEditing = false }) => {
                 onCancel={handleCancelTimeSlotForm}
                 timeSlot={editingTimeSlotIndex !== null ? timeSlots[editingTimeSlotIndex] : null}
                 isEditing={editingTimeSlotIndex !== null}
-                event={formData.dateFrom ? { dateFrom: formData.dateFrom, dateTo: formData.dateTo || formData.dateFrom } : null}
-                existingCategories={[...new Set(timeSlots
-                  .map(slot => slot.category)
-                  .filter(category => category && category.trim())
-                )].sort()}
+                event={formData.dateFrom ? {
+                  dateFrom: formData.dateFrom,
+                  dateTo: formData.dateTo || formData.dateFrom,
+                } : null}
+                existingCategories={categories}
               />
             </div>
           </div>

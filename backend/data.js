@@ -34,7 +34,20 @@ function rowToTimeSlot(row) {
     isFull: acceptedCount >= maxParticipants,
   };
 }
+// === CATEGORY UPDATE START: EVENT CATEGORY NORMALIZATION ===
+function normalizeEventCategories(categories = []) {
+  if (!Array.isArray(categories)) return [];
 
+  const normalized = categories
+    .map(category => String(category || '').trim())
+    .filter(Boolean)
+    .map(category => category.slice(0, 80));
+
+  return [...new Map(
+    normalized.map(category => [category.toLocaleLowerCase('de'), category])
+  ).values()].sort((a, b) => a.localeCompare(b, 'de'));
+}
+// === CATEGORY UPDATE END: EVENT CATEGORY NORMALIZATION ===
 function rowToEvent(row) {
   return {
     id: Number(row.id),
@@ -46,6 +59,7 @@ function rowToEvent(row) {
     timeTo: row.time_to ? String(row.time_to).slice(0, 5) : null,
     location: row.location || '',
     status: row.status,
+    categories,
     participants: [],
     timeSlots: (row.time_slots || []).map(rowToTimeSlot),
   };
@@ -72,6 +86,7 @@ function eventPayload(eventData) {
     time_to: eventData.timeTo || null,
     location: eventData.location || '',
     status: eventData.status || 'draft',
+    categories: normalizeEventCategories(eventData.categories),
   };
 }
 
@@ -100,6 +115,9 @@ export async function getEventById(id) {
 }
 
 export async function createEvent(eventData) {
+  if (normalizeEventCategories(eventData.categories).length === 0) {
+    throw new Error('Mindestens eine Kategorie ist erforderlich');
+  }
   const { data: event, error } = await supabase.from('events').insert(eventPayload(eventData)).select('id').single();
   if (error) throw error;
 
@@ -114,6 +132,10 @@ export async function createEvent(eventData) {
 export async function updateEvent(id, eventData) {
   const existing = await getEventById(id);
   if (!existing) return null;
+
+  if (Array.isArray(eventData.categories) && normalizeEventCategories(eventData.categories).length === 0) {
+    throw new Error('Mindestens eine Kategorie ist erforderlich');
+  }
 
   const merged = { ...existing, ...eventData };
   const { error } = await supabase.from('events').update(eventPayload(merged)).eq('id', Number(id));
