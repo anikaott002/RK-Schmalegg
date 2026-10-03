@@ -94,7 +94,13 @@ const PersonsTable = () => {
     // Combine headers and rows
     const csvContent = [
       headers.join(','),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+      ...rows.map(row => row.map(cell => {
+        // === SECURITY UPDATE START: CSV FORMULA INJECTION PROTECTION ===
+        const raw = String(cell ?? '');
+        const safe = /^[=+\-@]/.test(raw) ? `'${raw}` : raw;
+        return `"${safe.replace(/"/g, '""')}"`;
+        // === SECURITY UPDATE END: CSV FORMULA INJECTION PROTECTION ===
+      }).join(','))
     ].join('\n');
 
     // Create blob and download

@@ -201,25 +201,32 @@ export async function getTimeSlotParticipation(eventId, timeSlotId) {
   return slot.participants;
 }
 
+// === SECURITY UPDATE START: ATOMIC TIMESLOT BOOKING ===
 export async function setTimeSlotParticipation(eventId, timeSlotId, personId, status) {
-  const slot = await getTimeSlotById(eventId, timeSlotId);
-  if (!slot) throw new Error('Zeitslot nicht gefunden');
-
   const person = await userService.getPersonById(personId);
   if (!person) throw new Error('Person nicht gefunden');
 
-  const alreadyParticipating = slot.participants.some(p => p.person?.id === Number(personId));
-  if (!alreadyParticipating && status === 'accepted' && slot.isFull) {
-    throw new Error('Zeitslot ist bereits voll');
+  // Die Kapazitätsprüfung und das Upsert passieren atomar in PostgreSQL.
+  // Voraussetzung: SUPABASE_SECURITY_MIGRATION.sql einmalig im Supabase SQL Editor ausführen.
+  const { error } = await supabase.rpc('set_time_slot_participation_secure', {
+    p_event_id: Number(eventId),
+    p_time_slot_id: Number(timeSlotId),
+    p_person_id: Number(personId),
+    p_status: status,
+  });
+
+  if (error) {
+    const message = String(error.message || '');
+    if (message.includes('Zeitslot ist bereits voll')) throw new Error('Zeitslot ist bereits voll');
+    if (message.includes('Zeitslot nicht gefunden')) throw new Error('Zeitslot nicht gefunden');
+    if (message.includes('Person nicht gefunden')) throw new Error('Person nicht gefunden');
+    throw error;
   }
 
-  const { error } = await supabase.from('time_slot_participants').upsert(
-    { time_slot_id: Number(timeSlotId), person_id: Number(personId), status },
-    { onConflict: 'time_slot_id,person_id' }
-  );
-  if (error) throw error;
   return { person, status };
 }
+// === SECURITY UPDATE END: ATOMIC TIMESLOT BOOKING ===
+
 
 export async function removeTimeSlotParticipation(eventId, timeSlotId, personId) {
   const slot = await getTimeSlotById(eventId, timeSlotId);

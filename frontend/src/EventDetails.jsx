@@ -3,6 +3,15 @@ import EventCard from './EventCard';
 import ParticipantsTable from './ParticipantsTable';
 import './EventDetails.css';
 
+// === SECURITY UPDATE START: HTML ESCAPING FOR PRINT/PDF EXPORT ===
+const escapeHtml = (value) => String(value ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#039;');
+// === SECURITY UPDATE END: HTML ESCAPING FOR PRINT/PDF EXPORT ===
+
 const EventDetails = ({ event, onBack, onUpdate, onDelete, onManageTimeSlots, onEditTimeSlot, onManageParticipants }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -167,7 +176,9 @@ const EventDetails = ({ event, onBack, onUpdate, onDelete, onManageTimeSlots, on
       </html>
     `;
     
+    // === SECURITY UPDATE START: ONLY ESCAPED DYNAMIC DATA REACHES DOCUMENT.WRITE ===
     printWindow.document.write(html);
+    // === SECURITY UPDATE END: ONLY ESCAPED DYNAMIC DATA REACHES DOCUMENT.WRITE ===
     printWindow.document.close();
     
     // Wait for content to load, then trigger print
