@@ -1,10 +1,16 @@
 import React, { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import './UserLogin.css';
 import { authenticate, getAuthenticatedUser } from './authService';
 
 const LOGO_URL = 'https://tse4.mm.bing.net/th/id/OIP.UORK-u3V7UVpyTeEcb0y_QHaHa?rs=1&pid=ImgDetMain&o=7&rm=3';
 
 const UserLogin = ({ onUserSelect }) => {
+  // === SECURITY UPDATE START: EMAIL CONFIRMATION STATUS ===
+  const [searchParams] = useSearchParams();
+  const emailConfirmed =
+    searchParams.get('confirmed') === '1';
+  // === SECURITY UPDATE END: EMAIL CONFIRMATION STATUS ===
   const [registering, setRegistering] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

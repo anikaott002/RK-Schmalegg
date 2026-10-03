@@ -88,36 +88,91 @@ app.post('/api/auth/register', authRateLimit, requireAuthConfiguration, async (r
         message: 'Registrierung nur mit einer hinterlegten Mitglieder- oder Admin-E-Mail möglich.',
       })
     }
-    const { data, error } = await authClient.auth.signUp({ email, password })
-        if (error) {
-          console.error('Registrierung fehlgeschlagen:', error)
+    // === SECURITY UPDATE START: VERIFIED EMAIL REGISTRATION ===
 
-          let message = 'Registrierung nicht möglich.'
+    const frontendUrl =
+      String(process.env.FRONTEND_URL || '')
+        .replace(/\/$/, '')
 
-          if (error.code === 'user_already_exists' || error.code === 'email_exists') {
-            message = 'Für diese E-Mail-Adresse existiert bereits ein Konto. Bitte melden Sie sich an.'
-          } else if (error.code === 'weak_password') {
-            message = 'Das Passwort erfüllt die Sicherheitsanforderungen nicht.'
-          } else if (error.code === 'email_provider_disabled') {
-            message = 'Die Registrierung per E-Mail ist in Supabase deaktiviert.'
-          }
+    const { data, error } =
+      await authClient.auth.signUp({
+        email,
+        password,
+        options: frontendUrl
+          ? {
+              emailRedirectTo:
+                `${frontendUrl}/login?confirmed=1`,
+            }
+          : undefined,
+      })
 
-          return res.status(400).json({
-            success: false,
-            message,
-          })
-        }
-    res.status(201).json({
-    success: true,
-    data: {
-      session: {
-        accessToken: data.session.access_token,
-        refreshToken: data.session.refresh_token,
+
+    if (error) {
+      console.error(
+        'Registrierung fehlgeschlagen:',
+        error
+      )
+
+      let message =
+        'Registrierung nicht möglich.'
+
+      if (
+        error.code === 'user_already_exists' ||
+        error.code === 'email_exists'
+      ) {
+        message =
+          'Für diese E-Mail-Adresse existiert bereits ein Konto. Bitte melden Sie sich an.'
+      } else if (
+        error.code === 'weak_password'
+      ) {
+        message =
+          'Das Passwort erfüllt die Sicherheitsanforderungen nicht.'
+      } else if (
+        error.code === 'email_provider_disabled'
+      ) {
+        message =
+          'Die Registrierung per E-Mail ist in Supabase deaktiviert.'
+      }
+
+      return res.status(400).json({
+        success: false,
+        message,
+      })
+    }
+
+
+    // Bei aktivierter E-Mail-Bestätigung
+    // gibt Supabase noch keine Session zurück.
+    if (!data.session) {
+      return res.status(201).json({
+        success: true,
+        data: {
+          session: null,
+          emailConfirmationRequired: true,
+        },
+        message:
+          'Registrierung erfolgreich. Bitte bestätigen Sie Ihre E-Mail-Adresse.',
+      })
+    }
+
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        session: {
+          accessToken:
+            data.session.access_token,
+
+          refreshToken:
+            data.session.refresh_token,
+        },
+        emailConfirmationRequired: false,
       },
-      emailConfirmationRequired: false,
-    },
-    message: 'Registrierung erfolgreich',
+      message:
+        'Registrierung erfolgreich',
     })
+
+    // === SECURITY UPDATE END: VERIFIED EMAIL REGISTRATION ===
   } catch (error) {
     console.error('Registrierung fehlgeschlagen:', error)
     res.status(500).json({ success: false, message: 'Registrierung derzeit nicht möglich' })
