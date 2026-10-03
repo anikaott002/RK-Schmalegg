@@ -17,6 +17,10 @@ const UserLogin = ({ onUserSelect }) => {
     setNotice('');
   };
 
+  // === SECURITY UPDATE START: VERIFIED SELF-REGISTRATION ===
+  // Registrierung bleibt möglich. Das Backend akzeptiert sie aber nur für E-Mail-Adressen,
+  // die der Admin vorher beim Mitglied hinterlegt hat. Nach der Registrierung wird KEINE
+  // Session erwartet: Erst der Supabase-Bestätigungslink verifiziert den E-Mail-Besitz.
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
@@ -25,14 +29,21 @@ const UserLogin = ({ onUserSelect }) => {
 
     try {
       const result = await authenticate(
-      registering ? 'register' : 'login',
-      form
-    );
+        registering ? 'register' : 'login',
+        form
+      );
 
-
+      if (registering && result?.emailConfirmationRequired) {
+        setNotice(
+          'Wenn diese E-Mail-Adresse für die Registrierung freigeschaltet ist, wurde eine Bestätigungs-E-Mail gesendet. Bitte den Link öffnen und danach hier anmelden.'
+        );
+        setRegistering(false);
+        setForm(previous => ({ ...previous, password: '' }));
+        return;
+      }
 
       const user = await getAuthenticatedUser();
-      
+
       if (user.isAdmin) {
         onUserSelect({ id: 'admin', fullName: 'Administrator', isAdmin: true });
       } else if (user.person) {
@@ -41,11 +52,12 @@ const UserLogin = ({ onUserSelect }) => {
         setError('Für diese E-Mail-Adresse wurde kein Mitgliederprofil gefunden. Bitte wenden Sie sich an den Administrator.');
       }
     } catch (requestError) {
-      setError(requestError.message || 'Anmeldung fehlgeschlagen');
+      setError(requestError.message || (registering ? 'Registrierung fehlgeschlagen' : 'Anmeldung fehlgeschlagen'));
     } finally {
       setLoading(false);
     }
   };
+  // === SECURITY UPDATE END: VERIFIED SELF-REGISTRATION ===
 
   const toggleMode = () => {
     setRegistering(previous => !previous);
@@ -63,6 +75,14 @@ const UserLogin = ({ onUserSelect }) => {
         <p className="login-subtitle">
           {registering ? 'Konto mit E-Mail-Adresse und Passwort erstellen' : 'Bitte melden Sie sich an'}
         </p>
+
+        {/* === SECURITY UPDATE START: EMAIL CONFIRMATION NOTICE === */}
+        {emailConfirmed && !registering && (
+          <div className="success-message" role="status">
+            E-Mail-Adresse erfolgreich bestätigt. Sie können sich jetzt anmelden.
+          </div>
+        )}
+        {/* === SECURITY UPDATE END: EMAIL CONFIRMATION NOTICE === */}
 
         {error && <div className="error-message" role="alert">{error}</div>}
         {notice && <div className="success-message" role="status">{notice}</div>}

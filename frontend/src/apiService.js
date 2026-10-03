@@ -24,7 +24,14 @@ axios.interceptors.response.use(
 
     config._authRetry = true;
     const session = await refreshAuthSession();
-    if (!session) return Promise.reject(error);
+    // === SECURITY UPDATE START: EXPIRED SESSION REDIRECT ===
+    if (!session) {
+      if (!['/', '/login'].includes(window.location.pathname)) {
+        window.location.replace('/login?reason=session-expired');
+      }
+      return Promise.reject(error);
+    }
+    // === SECURITY UPDATE END: EXPIRED SESSION REDIRECT ===
     config.headers.Authorization = `Bearer ${session.accessToken}`;
     return axios(config);
   }

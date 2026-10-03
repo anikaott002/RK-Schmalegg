@@ -5,15 +5,48 @@ import * as dataService from './data.js'
 import * as userService from './userManagement.js'
 import { authClient, isAdminEmail, isAdminUser, optionalAuth, requireAdmin, requireAuth, requireAuthConfiguration } from './auth.js'
 
+// === SECURITY UPDATE START: CORS + SECURITY HEADERS ===
+const normalizeOrigin = value => String(value || '').trim().replace(/\/$/, '')
+
+const allowedOrigins = new Set([
+  normalizeOrigin(process.env.FRONTEND_URL),
+  ...(process.env.ALLOWED_ORIGINS || '').split(',').map(normalizeOrigin),
+  'http://localhost:5173',
+  'http://localhost:4173',
+].filter(Boolean))
+
 const corsOptions = {
-  origin: true, // Allow all origins for now - can be restricted later
-  optionsSuccessStatus: 200,
+  origin(origin, callback) {
+    // Requests without an Origin header (e.g. server-to-server/health checks) are allowed.
+    if (!origin || allowedOrigins.has(normalizeOrigin(origin))) {
+      return callback(null, true)
+    }
+    console.warn(`CORS blockiert Origin: ${origin}`)
+    return callback(new Error('CORS_ORIGIN_BLOCKED'))
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 204,
 }
 
 const app = express()
+// Vercel/Reverse-Proxy: echte Client-IP für Rate-Limiting korrekt auswerten.
+app.set('trust proxy', 1)
+app.disable('x-powered-by')
+
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'DENY')
+  res.setHeader('Referrer-Policy', 'no-referrer')
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-site')
+  next()
+})
 
 app.use(cors(corsOptions))
-app.use(express.json()) // Parse JSON request bodies
+app.use(express.json({ limit: '100kb' }))
+// === SECURITY UPDATE END: CORS + SECURITY HEADERS === // Parse JSON request bodies
+
 const authRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 10,

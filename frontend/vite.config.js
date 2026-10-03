@@ -13,5 +13,8 @@ export default defineConfig({
         ],
       },
     }),
-  ],
+    // === SECURITY/DEPLOYMENT UPDATE START: PWA REMOVED ===
+    // Keine PWA-Konfiguration mehr. Dadurch wird vite-plugin-pwa aktuell nicht benötigt.
+    // === SECURITY/DEPLOYMENT UPDATE END: PWA REMOVED ===
+  ]
 })

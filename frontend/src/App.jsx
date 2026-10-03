@@ -11,7 +11,10 @@ function App() {
       <div className="App">
         <Routes>
           <Route path="/" element={<LoginPage />} />
+          {/* === SECURITY UPDATE START: VERIFIED SELF-REGISTRATION ENTRY === */}
           <Route path="/login" element={<LoginPage />} />
+          {/* Registrierung erfolgt weiterhin im Login-Formular; es gibt bewusst keine /invite-Route. */}
+          {/* === SECURITY UPDATE END: VERIFIED SELF-REGISTRATION ENTRY === */}
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/admin/events" element={<AdminPage />} />
           <Route path="/admin/events/:eventId" element={<AdminPage />} />
