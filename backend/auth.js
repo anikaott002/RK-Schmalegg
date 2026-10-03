@@ -66,15 +66,33 @@ export async function requireAuth(req, res, next) {
   }
   if (await verifyToken(req, res, match[1])) return next();
 }
-// === SECURITY UPDATE START: OPTIONAL AUTH REMOVED ===
-// Es gibt bewusst kein optionalAuth mehr: Vereinsdaten werden ausschließlich nach Anmeldung ausgeliefert.
-// === SECURITY UPDATE END: OPTIONAL AUTH REMOVED ===
-// export async function optionalAuth(req, res, next) {
-//   const authorization = req.get('authorization') || '';
-//   const match = authorization.match(/^Bearer\s+(.+)$/i);
-//   if (!match) return next();
-//   if (await verifyToken(req, res, match[1])) return next();
-// }
+// === FIX START: RESTORE OPTIONAL AUTH FOR CURRENT SERVER.JS ===
+export async function optionalAuth(req, res, next) {
+  const authorization =
+    req.get('authorization') || ''
+
+  const match =
+    authorization.match(/^Bearer\s+(.+)$/i)
+
+  // Kein Token vorhanden:
+  // Route darf trotzdem fortgesetzt werden.
+  if (!match) {
+    return next()
+  }
+
+  // Token vorhanden:
+  // dann muss es gültig sein.
+  if (
+    await verifyToken(
+      req,
+      res,
+      match[1]
+    )
+  ) {
+    return next()
+  }
+}
+// === FIX END: RESTORE OPTIONAL AUTH FOR CURRENT SERVER.JS ===
 
 export function requireAdmin(req, res, next) {
   return requireAuth(req, res, () => {
