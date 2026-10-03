@@ -1028,3 +1028,236 @@
     font-size: 12px;
   }
 }
+
+
+/* =========================================
+   MOBILE / RESPONSIVE USER DASHBOARD
+   ========================================= */
+
+.user-dashboard,
+.dashboard-header,
+.user-info,
+.events-grid,
+.event-card,
+.event-details-container,
+.event-card-detail,
+.timeslots-signup-section,
+.participants-overview {
+  min-width: 0;
+}
+
+.user-info h1 {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.events-grid {
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(100%, 350px), 1fr)
+  );
+}
+
+/* Tablet + Handy */
+@media (max-width: 768px) {
+
+  .user-dashboard-background {
+    width: 100%;
+    min-height: 100vh;
+  }
+
+  .user-dashboard {
+    width: 100%;
+    max-width: 100%;
+    padding: 12px;
+  }
+
+  /* Header wie beim Admin untereinander */
+  .dashboard-header {
+    width: 100%;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 15px;
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+
+  .user-info {
+    width: 100%;
+    min-width: 0;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .user-info .header-logo {
+    width: 60px;
+    height: 60px;
+  }
+
+  .user-info h1 {
+    width: 100%;
+    font-size: 22px;
+    line-height: 1.25;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: center;
+  }
+
+  .logout-button {
+    width: auto;
+    max-width: 100%;
+  }
+
+  /* Jahresauswahl */
+  .year-filter-section {
+    width: 100%;
+    padding: 12px 15px;
+    margin-bottom: 20px;
+    justify-content: space-between;
+  }
+
+  .year-filter-section .year-select {
+    min-width: 90px;
+  }
+
+  /* Events */
+  .events-grid {
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 15px;
+  }
+
+  .event-card {
+    width: 100%;
+    max-width: 100%;
+    padding: 18px;
+  }
+
+  .event-header {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .event-header h3 {
+    width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  /* Detailansicht */
+  .event-details-container {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .event-card-detail {
+    width: 100%;
+    max-width: 100%;
+    padding: 18px;
+  }
+
+  .event-card-detail h2 {
+    font-size: 22px;
+    overflow-wrap: anywhere;
+  }
+
+  .event-card-detail .event-date,
+  .event-card-detail .event-time,
+  .event-card-detail .event-location {
+    display: block;
+    width: 100%;
+    margin-right: 0;
+  }
+
+  /* Zeitslots */
+  .timeslots-signup-section {
+    width: 100%;
+    padding: 18px;
+  }
+
+  .timeslots-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .timeslot-card {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .date-header {
+    font-size: 17px;
+    overflow-wrap: anywhere;
+  }
+
+  /* Teilnehmer */
+  .participants-overview {
+    width: 100%;
+    max-width: 100%;
+    padding: 15px;
+    overflow: hidden;
+  }
+
+  .overview-table-container {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .overview-table {
+    min-width: 600px;
+  }
+
+  /* Formulare */
+  .timespan-form {
+    width: calc(100vw - 30px);
+    max-width: 100%;
+    min-width: 0;
+    margin: 15px;
+    padding: 20px;
+  }
+
+  .form-row {
+    flex-direction: column;
+  }
+}
+
+/* Sehr kleine Handys */
+@media (max-width: 480px) {
+
+  .user-dashboard {
+    padding: 8px;
+  }
+
+  .dashboard-header {
+    padding: 14px 10px;
+    border-radius: 10px;
+  }
+
+  .user-info h1 {
+    font-size: 19px;
+  }
+
+  .event-card {
+    padding: 15px;
+    border-radius: 10px;
+  }
+
+  .event-card-detail {
+    padding: 15px;
+  }
+
+  .timeslots-signup-section {
+    padding: 12px;
+  }
+
+  .participants-overview {
+    padding: 10px;
+  }
+
+  .year-filter-section {
+    padding: 10px;
+  }
+}

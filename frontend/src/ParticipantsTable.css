@@ -155,3 +155,21 @@
     font-size: 12px;
   }
 }
+
+@media (max-width: 768px) {
+  .participants-overview {
+    width: 100%;
+    max-width: 100%;
+    padding: 15px;
+  }
+
+  .overview-table-container {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .overview-table {
+    min-width: 600px;
+  }
+}
