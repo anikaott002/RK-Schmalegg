@@ -4,7 +4,7 @@ import './index.css'
 import App from './App.jsx'
 
 // === SECURITY UPDATE START: GLOBAL SESSION WATCHER ===
-initializeSessionSecurity()
+//initializeSessionSecurity()
 // === SECURITY UPDATE END: GLOBAL SESSION WATCHER ===
 
 createRoot(document.getElementById('root')).render(
