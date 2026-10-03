@@ -1031,9 +1031,9 @@
 
 
 /* =========================================
-   MOBILE / RESPONSIVE USER DASHBOARD
+   Responsive member dashboard improvements
+   Keeps the member area fluid on phones, matching the admin layout behavior.
    ========================================= */
-
 .user-dashboard,
 .dashboard-header,
 .user-info,
@@ -1042,6 +1042,7 @@
 .event-details-container,
 .event-card-detail,
 .timeslots-signup-section,
+.timeslot-card,
 .participants-overview {
   min-width: 0;
 }
@@ -1052,31 +1053,29 @@
 }
 
 .events-grid {
-  grid-template-columns: repeat(
-    auto-fit,
-    minmax(min(100%, 350px), 1fr)
-  );
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
 }
 
-/* Tablet + Handy */
 @media (max-width: 768px) {
-
   .user-dashboard-background {
     width: 100%;
     min-height: 100vh;
+    overflow-x: hidden;
+    background-attachment: scroll;
   }
 
   .user-dashboard {
     width: 100%;
     max-width: 100%;
-    padding: 12px;
+    padding: 15px;
   }
 
-  /* Header wie beim Admin untereinander */
   .dashboard-header {
     width: 100%;
+    max-width: 100%;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     text-align: center;
     gap: 15px;
     padding: 16px;
@@ -1085,10 +1084,10 @@
 
   .user-info {
     width: 100%;
-    min-width: 0;
+    max-width: 100%;
     flex-direction: column;
-    justify-content: center;
     align-items: center;
+    justify-content: center;
     gap: 10px;
   }
 
@@ -1099,34 +1098,42 @@
 
   .user-info h1 {
     width: 100%;
+    max-width: 100%;
+    margin: 0;
     font-size: 22px;
     line-height: 1.25;
+    text-align: center;
     white-space: normal;
     overflow-wrap: anywhere;
-    text-align: center;
   }
 
   .logout-button {
-    width: auto;
     max-width: 100%;
   }
 
-  /* Jahresauswahl */
   .year-filter-section {
     width: 100%;
+    max-width: 100%;
     padding: 12px 15px;
     margin-bottom: 20px;
     justify-content: space-between;
+    flex-wrap: wrap;
   }
 
   .year-filter-section .year-select {
     min-width: 90px;
+    max-width: 100%;
   }
 
-  /* Events */
-  .events-grid {
+  .dashboard-stats,
+  .events-grid,
+  .timeslots-grid {
     width: 100%;
+    max-width: 100%;
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .events-grid {
     gap: 15px;
   }
 
@@ -1138,23 +1145,40 @@
 
   .event-header {
     width: 100%;
+    max-width: 100%;
     flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
   }
 
-  .event-header h3 {
-    width: 100%;
+  .event-header h3,
+  .event-description,
+  .time-span-info,
+  .date-header,
+  .category-header {
+    max-width: 100%;
     overflow-wrap: anywhere;
   }
 
-  /* Detailansicht */
-  .event-details-container {
+  .status-badge {
+    margin-left: 0;
+    white-space: normal;
+  }
+
+  .participation-actions,
+  .form-row {
+    flex-direction: column;
+  }
+
+  .event-details-container,
+  .event-card-detail,
+  .timeslots-signup-section,
+  .participants-overview {
     width: 100%;
     max-width: 100%;
   }
 
   .event-card-detail {
-    width: 100%;
-    max-width: 100%;
     padding: 18px;
   }
 
@@ -1168,33 +1192,44 @@
   .event-card-detail .event-location {
     display: block;
     width: 100%;
+    max-width: 100%;
     margin-right: 0;
+    overflow-wrap: anywhere;
   }
 
-  /* Zeitslots */
-  .timeslots-signup-section {
+  .event-card-detail .event-description {
     width: 100%;
-    padding: 18px;
+    max-width: 100%;
+    overflow-wrap: anywhere;
   }
 
-  .timeslots-grid {
-    grid-template-columns: minmax(0, 1fr);
+  .timeslots-signup-section {
+    padding: 18px;
   }
 
   .timeslot-card {
     width: 100%;
+    max-width: 100%;
+  }
+
+  .timeslot-header,
+  .timeslot-info,
+  .time-tracking-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .timeslot-actions {
+    width: 100%;
+  }
+
+  .btn-timeslot-signup,
+  .btn-timeslot-cancel {
     min-width: 0;
   }
 
-  .date-header {
-    font-size: 17px;
-    overflow-wrap: anywhere;
-  }
-
-  /* Teilnehmer */
   .participants-overview {
-    width: 100%;
-    max-width: 100%;
     padding: 15px;
     overflow: hidden;
   }
@@ -1210,23 +1245,20 @@
     min-width: 600px;
   }
 
-  /* Formulare */
-  .timespan-form {
-    width: calc(100vw - 30px);
-    max-width: 100%;
-    min-width: 0;
-    margin: 15px;
-    padding: 20px;
+  .timespan-form-overlay {
+    padding: 15px;
   }
 
-  .form-row {
-    flex-direction: column;
+  .timespan-form {
+    width: 100%;
+    max-width: 500px;
+    min-width: 0;
+    margin: 0;
+    padding: 20px;
   }
 }
 
-/* Sehr kleine Handys */
 @media (max-width: 480px) {
-
   .user-dashboard {
     padding: 8px;
   }
@@ -1240,11 +1272,7 @@
     font-size: 19px;
   }
 
-  .event-card {
-    padding: 15px;
-    border-radius: 10px;
-  }
-
+  .event-card,
   .event-card-detail {
     padding: 15px;
   }
@@ -1253,11 +1281,13 @@
     padding: 12px;
   }
 
-  .participants-overview {
+  .participants-overview,
+  .year-filter-section {
     padding: 10px;
   }
 
-  .year-filter-section {
-    padding: 10px;
+  .back-button {
+    max-width: 100%;
+    white-space: normal;
   }
 }
