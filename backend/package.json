@@ -7,10 +7,11 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
+  "start": "node server.js",
+  "dev": "node server.js",
+  "build": "echo \"Backend: no build step required\"",
+  "test": "echo \"Error: no test specified\" && exit 1"
+},
   "dependencies": {
     "@supabase/supabase-js": "^2.58.0",
     "cors": "^2.8.5",
