@@ -67,7 +67,7 @@ function rowToEvent(row) {
 
 const eventSelect = `
   id, name, description, date_from, date_to, time_from, time_to, location, status,
-  time_slots (
+  categories, time_slots (
     id, event_id, name, category, date, time_from, time_to, max_participants,
     time_slot_participants (
       status,
