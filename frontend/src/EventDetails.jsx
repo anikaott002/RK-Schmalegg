@@ -188,6 +188,332 @@ const EventDetails = ({ event, onBack, onUpdate, onDelete, onManageTimeSlots, on
     }, 250);
   };
 
+  // === WORKLIST PDF START: NAMES ONLY ===
+const handleExportWorkListPDF = () => {
+  const printWindow = window.open('', '_blank');
+
+  if (!printWindow) {
+    return;
+  }
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+
+      <title>
+        Arbeitsliste: ${escapeHtml(event.name)}
+      </title>
+
+      <style>
+        @media print {
+          @page {
+            margin: 2cm;
+          }
+        }
+
+        body {
+          font-family: Arial, sans-serif;
+          padding: 20px;
+          max-width: 210mm;
+          margin: 0 auto;
+          color: #333;
+        }
+
+        h1 {
+          color: #333;
+          border-bottom: 3px solid #f6ce38;
+          padding-bottom: 10px;
+        }
+
+        h2 {
+          margin-top: 30px;
+          color: #333;
+        }
+
+        h3 {
+          margin-top: 25px;
+          padding-bottom: 10px;
+          border-bottom: 2px solid #f6ce38;
+        }
+
+        h4 {
+          background: #fff8dc;
+          border-left: 4px solid #f6ce38;
+          padding: 8px 12px;
+          margin-top: 25px;
+        }
+
+        .event-info {
+          margin: 20px 0;
+        }
+
+        .event-info p {
+          margin: 5px 0;
+        }
+
+        .timeslot-title {
+          font-weight: bold;
+          margin-top: 20px;
+          margin-bottom: 8px;
+        }
+
+        .occupancy {
+          margin-bottom: 10px;
+        }
+
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin: 12px 0 25px;
+        }
+
+        th,
+        td {
+          border: 1px solid #ddd;
+          padding: 12px;
+          text-align: left;
+        }
+
+        th {
+          background: #333;
+          color: #f6ce38;
+        }
+
+        tr:nth-child(even) {
+          background: #f8f9fa;
+        }
+
+        .footer {
+          margin-top: 40px;
+          padding-top: 20px;
+          border-top: 1px solid #ddd;
+          font-size: 12px;
+          color: #7f8c8d;
+        }
+      </style>
+    </head>
+
+    <body>
+
+      <h1>
+        Arbeitsliste: ${escapeHtml(event.name)}
+      </h1>
+
+      <div class="event-info">
+
+        <p>
+          <strong>Datum:</strong>
+          ${escapeHtml(event.dateFrom)}
+          ${
+            event.dateTo !== event.dateFrom
+              ? ` bis ${escapeHtml(event.dateTo)}`
+              : ''
+          }
+        </p>
+
+        <p>
+          <strong>Ort:</strong>
+          ${escapeHtml(event.location || 'Nicht angegeben')}
+        </p>
+
+      </div>
+
+      <h2>Arbeitsliste</h2>
+
+      ${
+        event.timeSlots && event.timeSlots.length > 0
+          ? (() => {
+
+              const groupedByDate =
+                event.timeSlots.reduce((acc, slot) => {
+
+                  const date =
+                    slot.date || event.dateFrom;
+
+                  const category =
+                    slot.category || 'Ohne Kategorie';
+
+                  if (!acc[date]) {
+                    acc[date] = {};
+                  }
+
+                  if (!acc[date][category]) {
+                    acc[date][category] = [];
+                  }
+
+                  acc[date][category].push(slot);
+
+                  return acc;
+                }, {});
+
+
+              const sortedDates =
+                Object.keys(groupedByDate)
+                  .sort((a, b) =>
+                    a.localeCompare(b)
+                  );
+
+
+              return sortedDates.map(date => {
+
+                const formattedDate =
+                  new Date(date)
+                    .toLocaleDateString(
+                      'de-DE',
+                      {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      }
+                    );
+
+
+                return `
+                  <h3>
+                    ${escapeHtml(formattedDate)}
+                  </h3>
+
+                  ${
+                    Object.entries(
+                      groupedByDate[date]
+                    )
+                    .sort(([a], [b]) =>
+                      a.localeCompare(b)
+                    )
+                    .map(([category, slots]) => {
+
+                      const sortedSlots =
+                        [...slots].sort(
+                          (a, b) =>
+                            a.timeFrom.localeCompare(
+                              b.timeFrom
+                            )
+                        );
+
+
+                      return `
+                        <h4>
+                          ${escapeHtml(category)}
+                        </h4>
+
+                        ${
+                          sortedSlots.map(slot => {
+
+                            const acceptedParticipants =
+                              (
+                                slot.participants || []
+                              ).filter(
+                                participant =>
+                                  participant.status ===
+                                  'accepted'
+                              );
+
+
+                            return `
+                              <div class="timeslot-title">
+                                ${escapeHtml(slot.name)}
+                                (
+                                  ${escapeHtml(slot.timeFrom)}
+                                  -
+                                  ${escapeHtml(slot.timeTo)}
+                                )
+                              </div>
+
+                              <div class="occupancy">
+                                <strong>
+                                  Angemeldet:
+                                </strong>
+
+                                ${acceptedParticipants.length}
+                              </div>
+
+                              ${
+                                acceptedParticipants.length > 0
+                                  ? `
+                                    <table>
+                                      <thead>
+                                        <tr>
+                                          <th>Name</th>
+                                        </tr>
+                                      </thead>
+
+                                      <tbody>
+
+                                        ${
+                                          acceptedParticipants
+                                            .map(participant => {
+
+                                              const name =
+                                                participant.person?.fullName ||
+                                                `${participant.person?.firstName || ''} ${participant.person?.lastName || ''}`.trim() ||
+                                                'Unbekannt';
+
+
+                                              return `
+                                                <tr>
+                                                  <td>
+                                                    ${escapeHtml(name)}
+                                                  </td>
+                                                </tr>
+                                              `;
+                                            })
+                                            .join('')
+                                        }
+
+                                      </tbody>
+                                    </table>
+                                  `
+                                  : `
+                                    <p>
+                                      <em>
+                                        Noch keine Teilnehmer angemeldet
+                                      </em>
+                                    </p>
+                                  `
+                              }
+                            `;
+                          }).join('')
+                        }
+                      `;
+                    })
+                    .join('')
+                  }
+                `;
+              }).join('');
+            })()
+
+          : '<p><em>Keine Zeitslots vorhanden</em></p>'
+      }
+
+      <div class="footer">
+        <p>
+          Exportiert am:
+          ${escapeHtml(
+            new Date().toLocaleString('de-DE')
+          )}
+        </p>
+
+        <p>
+          RK Schmalegg Eventmanager
+        </p>
+      </div>
+
+    </body>
+    </html>
+  `;
+
+  printWindow.document.write(html);
+  printWindow.document.close();
+
+  setTimeout(() => {
+    printWindow.print();
+  }, 250);
+};
+// === WORKLIST PDF END: NAMES ONLY ===
+
   if (!event) {
     return (
       <div className="event-details-page">
@@ -215,6 +541,14 @@ const EventDetails = ({ event, onBack, onUpdate, onDelete, onManageTimeSlots, on
           <button className="export-button" onClick={handleExportPDF}>
             📄 PDF exportieren
           </button>
+          {/* === WORKLIST PDF BUTTON START === */}
+          <button
+            className="export-button"
+            onClick={handleExportWorkListPDF}
+          >
+            📋 Arbeitsliste exportieren
+          </button>
+          {/* === WORKLIST PDF BUTTON END === */}
           <button className="update-button" onClick={handleUpdateClick}>
             ✏️ Bearbeiten
           </button>
