@@ -1,3 +1,7 @@
+// === PASSWORD RESET START: SUPABASE IMPORT ===
+import { supabase } from './supabaseClient.js'
+// === PASSWORD RESET END: SUPABASE IMPORT ===
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 const SESSION_KEY = 'rk-schmalegg-auth-session';
 
@@ -87,7 +91,13 @@ async function expireSessionAndRedirect() {
   sessionStorage.removeItem(SESSION_KEY);
   await revokeStoredSession(session);
 
-  const publicPaths = ['/login', '/'];
+  // === PASSWORD RESET START: PUBLIC RESET ROUTE ===
+  const publicPaths = [
+    '/login',
+    '/',
+    '/reset-password'
+  ];
+  // === PASSWORD RESET END: PUBLIC RESET ROUTE ===
   if (!publicPaths.includes(window.location.pathname)) {
     window.location.replace('/login?reason=session-expired');
   }
@@ -190,3 +200,138 @@ export async function logout() {
     saveAuthSession(null);
   }
 }
+
+// === PASSWORD RESET START: RESET FUNCTIONS ===
+
+function requirePasswordResetClient() {
+  if (!supabase) {
+    throw new Error(
+      'Passwort-Zurücksetzen ist noch nicht konfiguriert.'
+    )
+  }
+
+  return supabase
+}
+
+
+export async function requestPasswordReset(email) {
+  const client =
+    requirePasswordResetClient()
+
+  const cleanEmail =
+    String(email || '')
+      .trim()
+      .toLowerCase()
+
+  if (
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+      cleanEmail
+    )
+  ) {
+    throw new Error(
+      'Bitte geben Sie eine gültige E-Mail-Adresse ein.'
+    )
+  }
+
+  const redirectTo =
+    `${window.location.origin}/reset-password`
+
+  const { error } =
+    await client.auth.resetPasswordForEmail(
+      cleanEmail,
+      {
+        redirectTo,
+      }
+    )
+
+  if (error) {
+    console.error(
+      'Passwort-Reset konnte nicht angefordert werden:',
+      error
+    )
+
+    throw new Error(
+      'Der Link zum Zurücksetzen konnte derzeit nicht gesendet werden.'
+    )
+  }
+}
+
+
+export async function getPasswordRecoverySession() {
+  const client =
+    requirePasswordResetClient()
+
+  const {
+    data,
+    error
+  } =
+    await client.auth.getSession()
+
+  if (error) {
+    throw new Error(
+      'Der Link zum Zurücksetzen konnte nicht geprüft werden.'
+    )
+  }
+
+  return data.session || null
+}
+
+
+export async function updatePasswordFromRecovery(
+  password
+) {
+  const client =
+    requirePasswordResetClient()
+
+  if (
+    typeof password !== 'string' ||
+    password.length < 12 ||
+    password.length > 128
+  ) {
+    throw new Error(
+      'Das Passwort muss mindestens 12 Zeichen lang sein.'
+    )
+  }
+
+  const {
+    data,
+    error
+  } =
+    await client.auth.updateUser({
+      password,
+    })
+
+  if (error) {
+    console.error(
+      'Passwort konnte nicht geändert werden:',
+      error
+    )
+
+    throw new Error(
+      'Das Passwort konnte nicht geändert werden. Der Link ist möglicherweise abgelaufen.'
+    )
+  }
+
+  return data
+}
+
+
+export async function clearPasswordRecoverySession() {
+  if (!supabase) {
+    return
+  }
+
+  const { error } =
+    await supabase.auth.signOut({
+      scope: 'local',
+    })
+
+  if (error) {
+    console.warn(
+      'Recovery-Session konnte nicht vollständig entfernt werden:',
+      error
+    )
+  }
+}
+
+// === PASSWORD RESET END: RESET FUNCTIONS ===

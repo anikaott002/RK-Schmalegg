@@ -3,6 +3,9 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import LoginPage from './pages/LoginPage';
 import AdminPage from './pages/AdminPage';
 import UserPage from './pages/UserPage';
+// === PASSWORD RESET START: RESET PAGE IMPORT ===
+import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
+// === PASSWORD RESET END: RESET PAGE IMPORT ===
 import './App.css';
 
 function App() {
@@ -13,7 +16,12 @@ function App() {
           <Route path="/" element={<LoginPage />} />
           {/* === SECURITY UPDATE START: VERIFIED SELF-REGISTRATION ENTRY === */}
           <Route path="/login" element={<LoginPage />} />
-          {/* Registrierung erfolgt weiterhin im Login-Formular; es gibt bewusst keine /invite-Route. */}
+          {/* === PASSWORD RESET START: RESET ROUTE === */}
+          <Route
+            path="/reset-password"
+            element={<ResetPasswordPage />}
+          />
+{/* === PASSWORD RESET END: RESET ROUTE === */}
           {/* === SECURITY UPDATE END: VERIFIED SELF-REGISTRATION ENTRY === */}
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/admin/events" element={<AdminPage />} />

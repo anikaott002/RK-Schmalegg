@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import './UserLogin.css';
-import { authenticate, getAuthenticatedUser } from './authService';
+import {
+  authenticate,
+  getAuthenticatedUser,
+  requestPasswordReset
+} from './authService';
 
 const LOGO_URL = 'https://tse4.mm.bing.net/th/id/OIP.UORK-u3V7UVpyTeEcb0y_QHaHa?rs=1&pid=ImgDetMain&o=7&rm=3';
 
@@ -10,9 +14,17 @@ const UserLogin = ({ onUserSelect }) => {
   const [searchParams] = useSearchParams();
   const emailConfirmed =
     searchParams.get('confirmed') === '1';
+    // === PASSWORD RESET START: RESET SUCCESS STATUS ===
+  const passwordResetSuccessful =
+    searchParams.get('reset') === 'success';
+  // === PASSWORD RESET END: RESET SUCCESS STATUS ===
   // === SECURITY UPDATE END: EMAIL CONFIRMATION STATUS ===
   const [registering, setRegistering] = useState(false);
   const [loading, setLoading] = useState(false);
+    // === PASSWORD RESET START: RESET STATE ===
+  const [resetLoading, setResetLoading] =
+    useState(false);
+  // === PASSWORD RESET END: RESET STATE ===
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [form, setForm] = useState({ email: '', password: '' });
@@ -65,6 +77,48 @@ const UserLogin = ({ onUserSelect }) => {
   };
   // === SECURITY UPDATE END: VERIFIED SELF-REGISTRATION ===
 
+// === PASSWORD RESET START: REQUEST RESET EMAIL ===
+const handleForgotPassword =
+  async () => {
+
+    setError('')
+    setNotice('')
+
+    const email =
+      form.email.trim()
+
+    if (!email) {
+      setError(
+        'Bitte geben Sie zuerst Ihre E-Mail-Adresse ein.'
+      )
+
+      return
+    }
+
+    setResetLoading(true)
+
+    try {
+      await requestPasswordReset(
+        email
+      )
+
+      // Absichtlich allgemein formuliert:
+      // Es wird nicht verraten, ob ein Konto existiert.
+      setNotice(
+        'Falls für diese E-Mail-Adresse ein Konto existiert, wurde ein Link zum Zurücksetzen des Passworts gesendet.'
+      )
+    } catch (requestError) {
+      setError(
+        requestError.message ||
+        'Der Link konnte derzeit nicht gesendet werden.'
+      )
+    } finally {
+      setResetLoading(false)
+    }
+  }
+// === PASSWORD RESET END: REQUEST RESET EMAIL ===
+
+
   const toggleMode = () => {
     setRegistering(previous => !previous);
     setError('');
@@ -88,6 +142,17 @@ const UserLogin = ({ onUserSelect }) => {
             E-Mail-Adresse erfolgreich bestätigt. Sie können sich jetzt anmelden.
           </div>
         )}
+        {/* === PASSWORD RESET START: SUCCESS NOTICE === */}
+        {passwordResetSuccessful && !registering && (
+          <div
+            className="success-message"
+            role="status"
+          >
+            Passwort erfolgreich geändert.
+            Sie können sich jetzt mit dem neuen Passwort anmelden.
+          </div>
+        )}
+        {/* === PASSWORD RESET END: SUCCESS NOTICE === */}
         {/* === SECURITY UPDATE END: EMAIL CONFIRMATION NOTICE === */}
 
         {error && <div className="error-message" role="alert">{error}</div>}
@@ -123,6 +188,23 @@ const UserLogin = ({ onUserSelect }) => {
               required
             />
           </div>
+
+          {/* === PASSWORD RESET START: FORGOT PASSWORD BUTTON === */}
+          {!registering && (
+            <button
+              type="button"
+              className="forgot-password-button"
+              onClick={handleForgotPassword}
+              disabled={loading || resetLoading}
+            >
+              {
+                resetLoading
+                  ? 'Link wird gesendet...'
+                  : 'Passwort vergessen?'
+              }
+            </button>
+          )}
+          {/* === PASSWORD RESET END: FORGOT PASSWORD BUTTON === */}
 
           <button type="submit" className="login-button" disabled={loading}>
             {loading ? 'Bitte warten...' : registering ? 'Konto erstellen' : 'Anmelden'}
