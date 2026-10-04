@@ -1,7 +1,7 @@
 import React from 'react';
 import './ParticipantsTable.css';
 
-const ParticipantsTable = ({ timeSlots, dateFrom }) => {
+const ParticipantsTable = ({ timeSlots, dateFrom, userMode = false }) => {
   if (!timeSlots || timeSlots.length === 0) {
     return null;
   }
@@ -27,7 +27,9 @@ const ParticipantsTable = ({ timeSlots, dateFrom }) => {
 
   return (
     <div className="participants-overview">
-      <h3>Zeitslots & Teilnehmer</h3>
+      <h3>
+        {userMode ? 'Eigene Teilnahmen' : 'Zeitslots & Teilnehmer'}
+      </h3>
       {sortedDates.map(date => {
         const categories = groupedByDate[date];
         const sortedCategories = Object.keys(categories).sort();
@@ -55,7 +57,9 @@ const ParticipantsTable = ({ timeSlots, dateFrom }) => {
                         <tr>
                           <th className="col-zeitslot">Zeitslot</th>
                           <th className="col-zeit">Zeit</th>
-                          <th className="col-belegung">Belegung</th>
+                          <th className="col-belegung">
+                            {userMode ? 'Status' : 'Belegung'}
+                          </th>
                           <th className="col-teilnehmer">Teilnehmer</th>
                         </tr>
                       </thead>
@@ -90,13 +94,24 @@ const ParticipantsTable = ({ timeSlots, dateFrom }) => {
                                     {timeSlot.timeFrom} - {timeSlot.timeTo}
                                   </td>
                                   <td rowSpan={allParticipants.length}>
+                                  {userMode ? (
                                     <span className="capacity">
-                                      {acceptedParticipants.length} / {timeSlot.maxParticipants}
+                                      Angemeldet
                                     </span>
-                                    {acceptedParticipants.length >= timeSlot.maxParticipants && 
-                                      <span className="full-badge-small">Voll</span>
-                                    }
-                                  </td>
+                                  ) : (
+                                    <>
+                                      <span className="capacity">
+                                        {acceptedParticipants.length} / {timeSlot.maxParticipants}
+                                      </span>
+
+                                      {acceptedParticipants.length >= timeSlot.maxParticipants && (
+                                        <span className="full-badge-small">
+                                          Voll
+                                        </span>
+                                      )}
+                                    </>
+                                  )}
+                                </td>
                                 </>
                               )}
                               <td>

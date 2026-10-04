@@ -238,7 +238,17 @@ const UserDashboard = ({ user, onLogout }) => {
     }
 
     const eventTimeSlots = getTimeSlotsForEvent(selectedEvent.id);
-    
+    // === OWN PARTICIPATIONS FILTER START ===
+// In der unteren Übersicht werden nur Zeitslots angezeigt,
+// bei denen der aktuell angemeldete Benutzer selbst angemeldet ist.
+const myParticipationTimeSlots = eventTimeSlots.filter(timeSlot =>
+  (timeSlot.participants || []).some(
+    participant =>
+      participant.status === 'accepted' &&
+      String(participant.person?.id) === String(user.id)
+  )
+);
+// === OWN PARTICIPATIONS FILTER END ===
     return (
       <div className="user-dashboard-background">
         <div className="user-dashboard">
@@ -392,13 +402,15 @@ const UserDashboard = ({ user, onLogout }) => {
             </div>
           )}
 
-          {/* Participants Overview Table */}
-          {eventTimeSlots.length > 0 && (
-            <ParticipantsTable 
-              timeSlots={eventTimeSlots} 
-              dateFrom={selectedEvent.dateFrom} 
-            />
-          )}
+          {/* === OWN PARTICIPATIONS TABLE START === */}
+{myParticipationTimeSlots.length > 0 && (
+  <ParticipantsTable
+    timeSlots={myParticipationTimeSlots}
+    dateFrom={selectedEvent.dateFrom}
+    userMode={true}
+  />
+)}
+{/* === OWN PARTICIPATIONS TABLE END === */}
         </div>
       </div>
       </div>
