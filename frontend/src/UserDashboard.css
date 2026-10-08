@@ -1291,3 +1291,28 @@
     white-space: normal;
   }
 }
+
+.family-person-select {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.family-person-select label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.family-person-select select {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: white;
+  color: #222;
+  font-size: 16px;
+  box-sizing: border-box;
+}

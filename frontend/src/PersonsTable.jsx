@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import FamilyManagement from './FamilyManagement';
 import './PersonsTable.css';
 import { apiFetch } from './authService';
 
@@ -6,6 +7,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000
 
 const PersonsTable = () => {
   const [persons, setPersons] = useState([]);
+  const [activeTab, setActiveTab] = useState('persons');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
@@ -170,7 +172,33 @@ const PersonsTable = () => {
       </div>
 
       {error && <div className="error-message">{error}</div>}
+      
+      <div className="persons-view-tabs">
+        <button
+          className={activeTab === 'persons'
+            ? 'btn-primary'
+            : 'btn-secondary'}
+          onClick={() => setActiveTab('persons')}
+        >
+          Einzelpersonen
+        </button>
 
+        <button
+          className={activeTab === 'families'
+            ? 'btn-primary'
+            : 'btn-secondary'}
+          onClick={() => setActiveTab('families')}
+        >
+          Familien
+        </button>
+      </div>
+
+      {activeTab === 'families' && (
+        <FamilyManagement persons={persons} />
+      )}
+
+      {activeTab === 'persons' && (
+        <>
       {showAddForm && (
         <div className="add-person-form">
           <h3>Neue Person hinzufügen</h3>
@@ -261,6 +289,8 @@ const PersonsTable = () => {
           <span className="stat-label">Personen registriert</span>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 };
