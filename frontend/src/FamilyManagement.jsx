@@ -243,12 +243,29 @@ export default function FamilyManagement({
                 </tr>
               ))}
             </tbody>
+          
           </table>
         )}
       </div>
+
+      {!loading && !error && (
+        <div className="persons-stats">
+          <div className="stat-item">
+            <span className="stat-number">
+              {families.length}
+            </span>
+            <span className="stat-label">
+              {families.length === 1
+                ? 'Familie in der aktuellen Ansicht'
+                : 'Familien in der aktuellen Ansicht'}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
 
 
 
