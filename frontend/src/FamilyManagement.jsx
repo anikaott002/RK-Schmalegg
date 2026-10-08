@@ -6,7 +6,10 @@ import './FamilyManagement.css';
 const API = import.meta.env.VITE_API_BASE_URL
   || 'http://localhost:3000';
 
-export default function FamilyManagement({ persons = [] }) {
+export default function FamilyManagement({
+  persons = [],
+  selectedYear = new Date().getFullYear()
+}) {
   const [families, setFamilies] = useState([]);
   const [name, setName] = useState('');
   const [emails, setEmails] = useState(['']);
@@ -17,7 +20,9 @@ export default function FamilyManagement({ persons = [] }) {
 
   async function loadFamilies() {
     try {
-      const response = await apiFetch(`${API}/api/families`);
+      const response = await apiFetch(
+        `${API}/api/families?year=${selectedYear}`
+      );
       const result = await response.json();
 
       if (!response.ok || !result.success) {
@@ -32,7 +37,7 @@ export default function FamilyManagement({ persons = [] }) {
 
   useEffect(() => {
     loadFamilies();
-  }, []);
+  }, [selectedYear]);
 
   const toggleMember = id => {
     setMemberIds(previous =>
@@ -185,26 +190,62 @@ export default function FamilyManagement({ persons = [] }) {
         </form>
       )}
 
-      <div className="family-cards">
-        {families.map(family => (
-          <div className="family-card" key={family.id}>
-            <h3>{family.name}</h3>
+      
+      <div className="persons-table family-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Familie</th>
+              <th>E-Mail</th>
+              <th>Telefon</th>
+              <th>Geleistete Stunden</th>
+            </tr>
+          </thead>
 
-            <strong>Familienmitglieder</strong>
-            <p>
-              {family.members?.map(m => m.fullName).join(', ')
-                || 'Keine Mitglieder'}
-            </p>
+          <tbody>
+            {families.map(family => (
+              <tr key={family.id}>
+                <td>
+                  <div className="person-name">
+                    <strong>{family.name}</strong>
+                  </div>
+                </td>
 
-            <strong>Login-E-Mails</strong>
-            <p>{family.emails?.join(', ') || 'Keine E-Mail'}</p>
+                <td>
+                  {(family.emails || []).length
+                    ? family.emails.map(email => (
+                        <div key={email} className="family-contact">
+                          {email}
+                        </div>
+                      ))
+                    : '–'}
+                </td>
+
+                <td>
+                  {(family.phones || []).length
+                    ? family.phones.map(phone => (
+                        <div key={phone} className="family-contact">
+                          {phone}
+                        </div>
+                      ))
+                    : '–'}
+                </td>
+
+                <td className="hours-cell">
+                  {family.totalHours || 0} h
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {families.length === 0 && (
+          <div className="no-data">
+            Es wurden noch keine Familien angelegt.
           </div>
-        ))}
-
-        {!families.length && (
-          <p>Es wurden noch keine Familien angelegt.</p>
         )}
       </div>
+
     </div>
   );
 }

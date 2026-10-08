@@ -472,14 +472,103 @@ const validEmail = email =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
 // Alle Familien abrufen – nur Admin
+
 app.get('/api/families', requireAdmin, async (req, res) => {
   try {
-    const { data: families, error } = await supabase
-      .from('family_accounts')
-      .select('id, name')
-      .order('name');
+    const year = req.query.year
+      ? Number(req.query.year)
+      : new Date().getFullYear();
 
-    if (error) throw error;
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+      return res.status(400).json({
+        success: false,
+        message: 'Ungültiges Jahr'
+      });
+    }
+
+    const { data: families, error: familyError } =
+      await supabase
+        .from('family_accounts')
+        .select('id, name')
+        .order('name');
+
+    if (familyError) throw familyError;
+
+    // Bestehende Stundenberechnung wiederverwenden
+    const persons = await userService.getAllPersons(year);
+    const personsById = new Map(
+      persons.map(p => [String(p.id), p])
+    );
+
+    const result = [];
+
+    for (const family of families || []) {
+      const { data: memberLinks, error: memberError } =
+        await supabase
+          .from('family_members')
+          .select('person_id')
+          .eq('family_id', family.id);
+
+      if (memberError) throw memberError;
+
+      const members = (memberLinks || [])
+        .map(link => personsById.get(String(link.person_id)))
+        .filter(Boolean);
+
+      const { data: logins, error: loginError } =
+        await supabase
+          .from('family_logins')
+          .select('email')
+          .eq('family_id', family.id);
+
+      if (loginError) throw loginError;
+
+      const emails = [...new Set(
+        (logins || [])
+          .map(login => login.email)
+          .filter(Boolean)
+      )];
+
+      const phones = [...new Set(
+        members
+          .map(member => member.phone)
+          .filter(Boolean)
+      )];
+
+      const totalHours = Math.round(
+        members.reduce(
+          (sum, member) =>
+            sum + Number(member.totalHours || 0),
+          0
+        ) * 10
+      ) / 10;
+
+      result.push({
+        id: family.id,
+        name: family.name,
+        emails,
+        phones,
+        members,
+        totalHours
+      });
+    }
+
+    res.json({
+      success: true,
+      data: result,
+      year
+    });
+
+  } catch (error) {
+    console.error('Familien laden:', error);
+
+    res.status(500).json({
+      success: false,
+      message: 'Familien konnten nicht geladen werden.'
+    });
+  }
+});
+
 
     const result = [];
 
