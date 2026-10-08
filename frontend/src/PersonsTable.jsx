@@ -327,14 +327,12 @@ const handlePrint = () => {
           </tr>
         </thead>
         <tbody>${tableRows}</tbody>
-        ${['families', 'combined'].includes(listFilter) ? `
-          <tfoot>
-            <tr>
-              <td colspan="3">Gesamtstunden</td>
-              <td>${totalDisplayedHours} h</td>
-            </tr>
-          </tfoot>
-        ` : ''}
+        <tfoot>
+          <tr>
+            <td colspan="3">Gesamtstunden</td>
+            <td>${totalDisplayedHours} h</td>
+          </tr>
+        </tfoot>
       </table>
     </body>
     </html>
