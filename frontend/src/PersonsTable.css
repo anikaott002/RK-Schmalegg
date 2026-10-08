@@ -333,3 +333,19 @@
     width: 100%;
   }
 }
+.persons-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+@media (max-width: 600px) {
+  .persons-actions {
+    justify-content: stretch;
+  }
+
+  .persons-actions button {
+    width: 100%;
+  }
+}

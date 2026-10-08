@@ -190,12 +190,14 @@ const fetchEventYears = async () => {
     ]);
 
     // Gesamtstunden ergänzen
-    rows.push([
-      'Gesamtstunden',
-      '',
-      '',
-      totalDisplayedHours
-    ]);
+    if (listFilter === 'families' || listFilter === 'combined') {
+      rows.push([
+        'Gesamtstunden',
+        '',
+        '',
+        totalDisplayedHours
+      ]);
+    }
 
     // Schutz vor CSV-Formel-Injection
     const escapeCSV = value => {
@@ -325,12 +327,14 @@ const handlePrint = () => {
           </tr>
         </thead>
         <tbody>${tableRows}</tbody>
-        <tfoot>
-          <tr>
-            <td colspan="3">Gesamtstunden</td>
-            <td>${totalDisplayedHours} h</td>
-          </tr>
-        </tfoot>
+        ${['families', 'combined'].includes(listFilter) ? `
+          <tfoot>
+            <tr>
+              <td colspan="3">Gesamtstunden</td>
+              <td>${totalDisplayedHours} h</td>
+            </tr>
+          </tfoot>
+        ` : ''}
       </table>
     </body>
     </html>
@@ -456,12 +460,7 @@ const canExport = !needsFamilyData || familyDataReady;
             </select>
           </div>
           <div className="header-buttons">
-            <button 
-              className="btn-primary"
-              onClick={() => setShowAddForm(true)}
-            >
-              + Person hinzufügen
-            </button>
+            
             <button 
               className="btn-secondary"
               onClick={() => alert('Excel-Import wird noch implementiert')}
@@ -494,11 +493,23 @@ const canExport = !needsFamilyData || familyDataReady;
           Ansicht:
         </label>
 
+        
         <select
           id="members-list-filter"
           value={listFilter}
-          onChange={e => setListFilter(e.target.value)}
+          onChange={e => {
+            const value = e.target.value;
+
+            setListFilter(value);
+
+            if (value === 'families') {
+              setActiveTab('families');
+            } else {
+              setActiveTab('persons');
+            }
+          }}
         >
+
           <option value="all">
             Alle Personen einzeln
           </option>
@@ -530,7 +541,10 @@ const canExport = !needsFamilyData || familyDataReady;
           className={activeTab === 'persons'
             ? 'btn-primary'
             : 'btn-secondary'}
-          onClick={() => setActiveTab('persons')}
+          onClick={() => {
+            setActiveTab('persons');
+            setListFilter('all');
+          }}
         >
           Einzelpersonen
         </button>
@@ -554,6 +568,14 @@ const canExport = !needsFamilyData || familyDataReady;
 
       {activeTab === 'persons' && (
         <>
+        <div className="persons-actions">
+          <button
+            className="btn-primary"
+            onClick={() => setShowAddForm(true)}
+          >
+            + Person hinzufügen
+          </button>
+        </div>
       {showAddForm && (
         <div className="add-person-form">
           <h3>Neue Person hinzufügen</h3>
@@ -659,16 +681,6 @@ const canExport = !needsFamilyData || familyDataReady;
                 ))}
               </tbody>
 
-              <tfoot>
-                <tr>
-                  <td colSpan="3">
-                    <strong>Gesamtstunden</strong>
-                  </td>
-                  <td className="hours-cell">
-                    <strong>{totalDisplayedHours} h</strong>
-                  </td>
-                </tr>
-              </tfoot>
             </table>
 
             {filteredRows.length === 0 && (
