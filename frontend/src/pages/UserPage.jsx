@@ -13,22 +13,45 @@ const UserPage = () => {
     loadUser();
   }, [userId]);
 
-  const loadUser = async () => {
-    try {
-      setLoading(true);
-      const authenticatedUser = await getAuthenticatedUser();
-      if (!authenticatedUser.isAdmin && String(authenticatedUser.person?.id) === String(userId)) {
-        setUser(authenticatedUser.person);
-      } else {
-        navigate('/login');
-      }
-    } catch (error) {
-      console.error('Error loading user:', error);
+  
+const loadUser = async () => {
+  try {
+    setLoading(true);
+
+    const authenticatedUser = await getAuthenticatedUser();
+
+    const allowedPersons =
+      authenticatedUser.allowedPersons || [];
+
+    const hasAccess =
+      !authenticatedUser.isAdmin &&
+      allowedPersons.some(
+        person => String(person.id) === String(userId)
+      );
+
+    if (hasAccess) {
+      const person = authenticatedUser.person;
+
+      setUser({
+        ...person,
+        isAdmin: false,
+        family: authenticatedUser.family,
+        allowedPersons,
+        fullName:
+          authenticatedUser.family?.name ||
+          person.fullName
+      });
+    } else {
       navigate('/login');
-    } finally {
-      setLoading(false);
     }
-  };
+  } catch (error) {
+    console.error('Error loading user:', error);
+    navigate('/login');
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const handleLogout = () => {
     logout().finally(() => navigate('/'));
