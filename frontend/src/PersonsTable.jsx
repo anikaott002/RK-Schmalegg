@@ -7,6 +7,12 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000
 
 const PersonsTable = () => {
   const [persons, setPersons] = useState([]);
+  
+  const [families, setFamilies] = useState([]);
+  const [listFilter, setListFilter] = useState('all');
+  const [familiesLoading, setFamiliesLoading] = useState(true);
+  const [familiesError, setFamiliesError] = useState('');
+
   const [activeTab, setActiveTab] = useState('persons');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -21,6 +27,7 @@ const PersonsTable = () => {
 
   useEffect(() => {
     fetchPersons();
+    fetchFamilies();
   }, [selectedYear]);
 
   const fetchPersons = async () => {
@@ -41,6 +48,35 @@ const PersonsTable = () => {
       setLoading(false);
     }
   };
+
+  
+const fetchFamilies = async () => {
+  try {
+    setFamiliesLoading(true);
+    setFamiliesError('');
+
+    const response = await apiFetch(
+      `${API_BASE_URL}/api/families?year=${selectedYear}`
+    );
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(
+        result.message || 'Familien konnten nicht geladen werden'
+      );
+    }
+
+    setFamilies(result.data || []);
+
+  } catch (error) {
+    console.error('Fehler beim Laden der Familien:', error);
+    setFamiliesError(error.message);
+  } finally {
+    setFamiliesLoading(false);
+  }
+};
+
 
   const handleAddPerson = async () => {
     if (!newPerson.firstName.trim() || !newPerson.lastName.trim()) {
@@ -73,58 +109,272 @@ const PersonsTable = () => {
     }
   };
 
+
   const handleExportCSV = () => {
-    // Create CSV header
-    const headers = ['ID', 'Vorname', 'Nachname', 'E-Mail', 'Telefon', 'Geleistete Stunden'];
-    
-    // Create CSV rows
-    const rows = persons.map(person => {
-      const nameParts = person.fullName.split(' ');
-      const firstName = nameParts[0] || '';
-      const lastName = nameParts.slice(1).join(' ') || '';
-      
-      return [
-        person.id,
-        firstName,
-        lastName,
-        person.email || '',
-        person.phone || '',
-        person.totalHours || 0
-      ];
-    });
+    if (!canExport) {
+      alert('Bitte warten, bis die Familien geladen sind.');
+      return;
+    }
 
-    // Combine headers and rows
+    // CSV-Spalten ohne ID
+    const headers = [
+      'Name',
+      'E-Mail',
+      'Telefon',
+      'Geleistete Stunden'
+    ];
+
+    // Daten aus dem aktuell ausgewählten Filter
+    const rows = filteredRows.map(row => [
+      row.name,
+      row.emails.join(' / '),
+      row.phones.join(' / '),
+      row.totalHours
+    ]);
+
+    // Gesamtstunden ergänzen
+    rows.push([
+      'Gesamtstunden',
+      '',
+      '',
+      totalDisplayedHours
+    ]);
+
+    // Schutz vor CSV-Formel-Injection
+    const escapeCSV = value => {
+      const raw = String(value ?? '');
+      const safe = /^[\s]*[=+\-@\t\r]/.test(raw)
+        ? `'${raw}`
+        : raw;
+
+      return `"${safe.replace(/"/g, '""')}"`;
+    };
+
+    // CSV erstellen
     const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.map(cell => {
-        // === SECURITY UPDATE START: CSV FORMULA INJECTION PROTECTION ===
-        const raw = String(cell ?? '');
-        const safe = /^[=+\-@]/.test(raw) ? `'${raw}` : raw;
-        return `"${safe.replace(/"/g, '""')}"`;
-        // === SECURITY UPDATE END: CSV FORMULA INJECTION PROTECTION ===
-      }).join(','))
-    ].join('\n');
+      headers.map(escapeCSV).join(';'),
+      ...rows.map(row =>
+        row.map(escapeCSV).join(';')
+      )
+    ].join('\r\n');
 
-    // Create blob and download
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
+    // Datei herunterladen
+    const blob = new Blob(
+      ['\uFEFF' + csvContent],
+      { type: 'text/csv;charset=utf-8;' }
+    );
+
     const url = URL.createObjectURL(blob);
-    
-    link.setAttribute('href', url);
-    link.setAttribute('download', `Mitglieder_${selectedYear}_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download =
+      `Mitglieder_${selectedYear}_${listFilter}_${new Date().toISOString().split('T')[0]}.csv`;
+
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
+    link.remove();
+
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
-  // Generate year options (current year and 5 years back)
-  const currentYear = new Date().getFullYear();
-  const yearOptions = [];
-  for (let i = 0; i <= 5; i++) {
-    yearOptions.push(currentYear - i);
+
+  
+const handlePrint = () => {
+  if (!canExport) {
+    alert('Bitte warten, bis die Familien geladen sind.');
+    return;
   }
+
+  const escapeHTML = value =>
+    String(value ?? '').replace(/[&<>"']/g, char => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    }[char]));
+
+  const filterNames = {
+    all: 'Alle Personen einzeln',
+    standalone: 'Personen ohne Familie',
+    families: 'Familien',
+    combined: 'Familien und Einzelpersonen'
+  };
+
+  const tableRows = filteredRows.map(row => `
+    <tr>
+      <td>${escapeHTML(row.name)}</td>
+      <td>${row.emails.map(escapeHTML).join('<br>')}</td>
+      <td>${row.phones.map(escapeHTML).join('<br>')}</td>
+      <td>${escapeHTML(row.totalHours)} h</td>
+    </tr>
+  `).join('');
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="de">
+    <head>
+      <meta charset="UTF-8">
+      <title>Arbeitsstunden ${selectedYear}</title>
+      <style>
+        body {
+          font-family: Arial, sans-serif;
+          color: #222;
+          padding: 24px;
+        }
+        h1 { font-size: 22px; }
+        p { color: #555; }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-top: 22px;
+          font-size: 12px;
+        }
+        th, td {
+          padding: 10px;
+          border-bottom: 1px solid #ddd;
+          text-align: left;
+          vertical-align: top;
+          overflow-wrap: anywhere;
+        }
+        th {
+          background: #f1f1f1;
+        }
+        tfoot td {
+          font-weight: bold;
+          border-top: 2px solid #333;
+        }
+        @page {
+          size: A4 landscape;
+          margin: 15mm;
+        }
+      </style>
+    </head>
+    <body>
+      <h1>RK Schmalegg – Arbeitsstunden</h1>
+      <p>
+        Jahr: ${selectedYear}<br>
+        Ansicht: ${escapeHTML(filterNames[listFilter])}
+      </p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>E-Mail</th>
+            <th>Telefon</th>
+            <th>Geleistete Stunden</th>
+          </tr>
+        </thead>
+        <tbody>${tableRows}</tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3">Gesamtstunden</td>
+            <td>${totalDisplayedHours} h</td>
+          </tr>
+        </tfoot>
+      </table>
+    </body>
+    </html>
+  `;
+
+  const printWindow = window.open('', '_blank');
+
+  if (!printWindow) {
+    alert('Bitte Pop-ups für diese Website erlauben.');
+    return;
+  }
+
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.print();
+};
+
+
+ // Dynamische Jahresauswahl: 5 Jahre zurück + zukünftige Event-Jahre
+const currentYear = new Date().getFullYear();
+
+const firstYear = currentYear - 5;
+const lastYear = Math.max(currentYear, latestEventYear);
+
+const yearOptions = [];
+
+for (let year = lastYear; year >= firstYear; year--) {
+  yearOptions.push(year);
+}
+
+  
+// Personen, die einer Familie zugeordnet sind
+const familyMemberIds = new Set(
+  families.flatMap(family =>
+    (family.members || []).map(member => String(member.id))
+  )
+);
+
+// Personen ohne Familienzuordnung
+const standalonePersons = persons.filter(
+  person => !familyMemberIds.has(String(person.id))
+);
+
+// Normale Personenzeilen
+const createPersonRows = list => list.map(person => ({
+  key: `person-${person.id}`,
+  type: 'person',
+  name: person.fullName,
+  emails: person.email ? [person.email] : [],
+  phones: person.phone ? [person.phone] : [],
+  totalHours: Number(person.totalHours || 0)
+}));
+
+// Familienzeilen mit zusammengefassten Stunden
+const familyRows = families.map(family => ({
+  key: `family-${family.id}`,
+  type: 'family',
+  name: family.name,
+  emails: family.emails || [],
+  phones: family.phones || [],
+  totalHours: Number(family.totalHours || 0)
+}));
+
+let filteredRows = [];
+
+switch (listFilter) {
+  case 'standalone':
+    filteredRows = createPersonRows(standalonePersons);
+    break;
+
+  case 'families':
+    filteredRows = familyRows;
+    break;
+
+  case 'combined':
+    filteredRows = [
+      ...familyRows,
+      ...createPersonRows(standalonePersons)
+    ];
+    break;
+
+  default:
+    filteredRows = createPersonRows(persons);
+}
+
+filteredRows.sort((a, b) =>
+  a.name.localeCompare(b.name, 'de')
+);
+
+const totalDisplayedHours = Math.round(
+  filteredRows.reduce(
+    (sum, row) => sum + row.totalHours,
+    0
+  ) * 10
+) / 10;
+
+const needsFamilyData = listFilter !== 'all';
+const familyDataReady = !familiesLoading && !familiesError;
+const canExport = !needsFamilyData || familyDataReady;
 
   if (loading) {
     return <div className="loading">Lade Personen...</div>;
@@ -167,11 +417,56 @@ const PersonsTable = () => {
             >
               📥 CSV exportieren
             </button>
+            
+            <button
+              className="btn-secondary"
+              onClick={handlePrint}
+              disabled={!canExport}
+            >
+              🖨️ PDF / Drucken
+            </button>
+
           </div>
         </div>
       </div>
 
       {error && <div className="error-message">{error}</div>}
+      
+      <div className="members-filter">
+        <label htmlFor="members-list-filter">
+          Ansicht:
+        </label>
+
+        <select
+          id="members-list-filter"
+          value={listFilter}
+          onChange={e => setListFilter(e.target.value)}
+        >
+          <option value="all">
+            Alle Personen einzeln
+          </option>
+
+          <option value="standalone">
+            Nur Personen ohne Familie
+          </option>
+
+          <option value="families">
+            Nur Familien (Stunden summiert)
+          </option>
+
+          <option value="combined">
+            Familien + Personen ohne Familie
+          </option>
+        </select>
+      </div>
+
+      {familiesError && (
+        <div className="error-message">
+          Familien konnten nicht geladen werden:
+          {' '}{familiesError}
+        </div>
+      )}
+
       
       <div className="persons-view-tabs">
         <button
@@ -194,7 +489,10 @@ const PersonsTable = () => {
       </div>
 
       {activeTab === 'families' && (
-        <FamilyManagement persons={persons} />
+        <FamilyManagement
+          persons={persons}
+          selectedYear={selectedYear}
+        />
       )}
 
       {activeTab === 'persons' && (
@@ -248,45 +546,88 @@ const PersonsTable = () => {
         </div>
       )}
 
+      
       <div className="persons-table">
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Name</th>
-              <th>E-Mail</th>
-              <th>Telefon</th>
-              <th>Geleistete Stunden</th>
-            </tr>
-          </thead>
-          <tbody>
-            {persons.map((person) => (
-              <tr key={person.id}>
-                <td>{person.id}</td>
-                <td>
-                  <div className="person-name">
-                    <strong>{person.fullName}</strong>
-                  </div>
-                </td>
-                <td>{person.email}</td>
-                <td>{person.phone}</td>
-                <td className="hours-cell">{person.totalHours || 0} h</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {persons.length === 0 && (
+        {needsFamilyData && !familyDataReady ? (
           <div className="no-data">
-            Keine Personen vorhanden
+            {familiesError
+              ? 'Familienansicht momentan nicht verfügbar.'
+              : 'Familien werden geladen...'}
           </div>
+        ) : (
+          <>
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>E-Mail</th>
+                  <th>Telefon</th>
+                  <th>Geleistete Stunden</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {filteredRows.map(row => (
+                  <tr key={row.key}>
+                    <td>
+                      <div className="person-name">
+                        <strong>{row.name}</strong>
+                      </div>
+                    </td>
+
+                    <td>
+                      {row.emails.length
+                        ? row.emails.map(email => (
+                            <div className="family-contact" key={email}>
+                              {email}
+                            </div>
+                          ))
+                        : '–'}
+                    </td>
+
+                    <td>
+                      {row.phones.length
+                        ? row.phones.map(phone => (
+                            <div className="family-contact" key={phone}>
+                              {phone}
+                            </div>
+                          ))
+                        : '–'}
+                    </td>
+
+                    <td className="hours-cell">
+                      {row.totalHours} h
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+
+              <tfoot>
+                <tr>
+                  <td colSpan="3">
+                    <strong>Gesamtstunden</strong>
+                  </td>
+                  <td className="hours-cell">
+                    <strong>{totalDisplayedHours} h</strong>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+
+            {filteredRows.length === 0 && (
+              <div className="no-data">
+                Keine Einträge für diesen Filter vorhanden.
+              </div>
+            )}
+          </>
         )}
       </div>
 
+
       <div className="persons-stats">
         <div className="stat-item">
-          <span className="stat-number">{persons.length}</span>
-          <span className="stat-label">Personen registriert</span>
+          <span className="stat-number">{filteredRows.length}</span>
+          <span className="stat-label">Einträge in der aktuellen Ansicht</span>
         </div>
       </div>
       </>

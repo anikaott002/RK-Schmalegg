@@ -81,3 +81,27 @@
     padding: 14px;
   }
 }
+
+.family-table {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.family-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.family-contact {
+  margin-bottom: 5px;
+  overflow-wrap: anywhere;
+}
+
+.family-contact:last-child {
+  margin-bottom: 0;
+}
+
+.family-table .hours-cell {
+  font-weight: 600;
+  white-space: nowrap;
+}
