@@ -64,8 +64,16 @@ const UserLogin = ({ onUserSelect }) => {
 
       if (user.isAdmin) {
         onUserSelect({ id: 'admin', fullName: 'Administrator', isAdmin: true });
+      
       } else if (user.person) {
-        onUserSelect({ ...user.person, isAdmin: false });
+        onUserSelect({
+          ...user.person,
+          isAdmin: false,
+          family: user.family,
+          allowedPersons: user.allowedPersons || [user.person],
+          fullName: user.family?.name || user.person.fullName
+        });
+
       } else {
         setError('Für diese E-Mail-Adresse wurde kein Mitgliederprofil gefunden. Bitte wenden Sie sich an den Administrator.');
       }

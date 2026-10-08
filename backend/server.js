@@ -3,6 +3,8 @@ import cors from 'cors'
 import { rateLimit } from 'express-rate-limit'
 import * as dataService from './data.js'
 import * as userService from './userManagement.js'
+import { supabase } from './supabaseClient.js'
+import * as familyService from './familyManagement.js'
 import { authClient, isAdminEmail, isAdminUser, optionalAuth, requireAdmin, requireAuth, requireAuthConfiguration } from './auth.js'
 
 // === SECURITY UPDATE START: CORS + SECURITY HEADERS ===
@@ -81,13 +83,21 @@ app.post('/api/auth/register', authRateLimit, requireAuthConfiguration, async (r
   }
 
   try {
-    const member = await userService.getPersonByEmail(email)
-    if (!member && !isAdminEmail(email)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Registrierung nur mit einer hinterlegten Mitglieder- oder Admin-E-Mail möglich.',
-      })
-    }
+            
+        const member = await userService.getPersonByEmail(email);
+
+        const family = await familyService.getFamilyByEmail(email);
+
+        if (!member && !family && !isAdminEmail(email)) {
+          return res.status(403).json({
+            success: false,
+            message:
+              'Registrierung nur mit einer hinterlegten Mitglieder-, Familien- oder Admin-E-Mail möglich.'
+          });
+        }
+
+    // The previous return statement for non-member/non-family/non-admin emails has been handled above.
+    // So this part of the code is no longer needed.
     // === SECURITY UPDATE START: VERIFIED EMAIL REGISTRATION ===
 
     const frontendUrl =
@@ -256,22 +266,49 @@ app.post('/api/auth/logout', requireAuthConfiguration, async (req, res) => {
   }
 })
 
+
 app.get('/api/auth/me', requireAuth, async (req, res) => {
   try {
-    const person = req.isAdmin ? null : await userService.getPersonByEmail(req.user.email)
+    const email = req.user.email;
+    const isAdmin = isAdminUser(req.user);
+
+    const family = isAdmin
+      ? null
+      : await familyService.getFamilyByEmail(email);
+
+    const allowedPersons = isAdmin
+      ? []
+      : await familyService.getAllowedPersons(email);
+
+    const person = isAdmin
+      ? null
+      : await userService.getPersonByEmail(email);
+
     res.json({
       success: true,
       data: {
-        email: req.user.email,
-        isAdmin: isAdminUser(req.user),
-        person,
-      },
-    })
+        email,
+        isAdmin,
+        person: person || allowedPersons[0] || null,
+        family: family
+          ? {
+              id: family.id,
+              name: family.name
+            }
+          : null,
+        allowedPersons
+      }
+    });
   } catch (error) {
-    console.error('Profil konnte nicht geladen werden:', error)
-    res.status(500).json({ success: false, message: 'Profil konnte nicht geladen werden' })
+    console.error('Profil konnte nicht geladen werden:', error);
+
+    res.status(500).json({
+      success: false,
+      message: 'Profil konnte nicht geladen werden'
+    });
   }
-})
+});
+
 
 // Get all events (with optional status filter)
 app.get('/api/events', optionalAuth, async (req, res) => {
@@ -429,6 +466,219 @@ app.delete('/api/events/:id', requireAdmin, async (req, res) => {
   }
 })
 
+
+
+const validEmail = email =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+// Alle Familien abrufen – nur Admin
+app.get('/api/families', requireAdmin, async (req, res) => {
+  try {
+    const { data: families, error } = await supabase
+      .from('family_accounts')
+      .select('id, name')
+      .order('name');
+
+    if (error) throw error;
+
+    const result = [];
+
+    for (const family of families || []) {
+      const { data: links, error: membersError } =
+        await supabase
+          .from('family_members')
+          .select('person_id')
+          .eq('family_id', family.id);
+
+      if (membersError) throw membersError;
+
+      const ids = (links || []).map(m => m.person_id);
+      let members = [];
+
+      if (ids.length) {
+        const { data, error: personError } = await supabase
+          .from('persons')
+          .select('id, first_name, last_name')
+          .in('id', ids);
+
+        if (personError) throw personError;
+
+        members = (data || []).map(person => ({
+          id: person.id,
+          fullName:
+            `${person.first_name} ${person.last_name}`
+        }));
+      }
+
+      const { data: logins, error: loginError } =
+        await supabase
+          .from('family_logins')
+          .select('email')
+          .eq('family_id', family.id);
+
+      if (loginError) throw loginError;
+
+      result.push({
+        id: family.id,
+        name: family.name,
+        members,
+        emails: (logins || []).map(login => login.email)
+      });
+    }
+
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('Familien laden:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Familien konnten nicht geladen werden.'
+    });
+  }
+});
+
+// Neue Familie erstellen – nur Admin
+app.post('/api/families', requireAdmin, async (req, res) => {
+  const name = String(req.body?.name || '').trim();
+  const emails = req.body?.emails;
+  const personIds = req.body?.personIds;
+
+  if (
+    !name ||
+    !Array.isArray(emails) ||
+    !Array.isArray(personIds)
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: 'Ungültige Familiendaten.'
+    });
+  }
+
+  const normalizedEmails = emails.map(email =>
+    String(email).trim().toLowerCase()
+  );
+
+  const uniqueIds = [...new Set(personIds.map(Number))];
+
+  if (
+    !normalizedEmails.length ||
+    normalizedEmails.some(email => !validEmail(email)) ||
+    new Set(normalizedEmails).size !== normalizedEmails.length ||
+    !uniqueIds.length ||
+    uniqueIds.some(id => !Number.isSafeInteger(id) || id <= 0)
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: 'E-Mails oder Mitglieder sind ungültig.'
+    });
+  }
+
+  try {
+    // Prüfen, ob Personen bereits Familien angehören
+    const { data: existing, error: existingError } =
+      await supabase
+        .from('family_members')
+        .select('person_id')
+        .in('person_id', uniqueIds);
+
+    if (existingError) throw existingError;
+
+    if (existing.length) {
+      return res.status(409).json({
+        success: false,
+        message: 'Mindestens eine Person gehört bereits einer Familie an.'
+      });
+    }
+
+    // Auf vorhandene fremde Login-Adressen prüfen
+    const { data: existingLogins, error: loginCheckError } =
+      await supabase
+        .from('family_logins')
+        .select('email')
+        .in('email', normalizedEmails);
+
+    if (loginCheckError) throw loginCheckError;
+
+    if (existingLogins.length) {
+      return res.status(409).json({
+        success: false,
+        message: 'Eine E-Mail gehört bereits zu einer anderen Familie.'
+      });
+    }
+
+    // Bestehende Einzelkonten nicht fremden Familien zuweisen
+    const { data: personsWithEmail, error: emailCheckError } =
+      await supabase
+        .from('persons')
+        .select('id, email')
+        .in('email', normalizedEmails);
+
+    if (emailCheckError) throw emailCheckError;
+
+    if (personsWithEmail.some(person =>
+      !uniqueIds.includes(Number(person.id))
+    )) {
+      return res.status(409).json({
+        success: false,
+        message: 'Eine Login-E-Mail gehört zu einer Person außerhalb dieser Familie.'
+      });
+    }
+
+    // Familie erstellen
+    const { data: family, error: familyError } =
+      await supabase
+        .from('family_accounts')
+        .insert({ name })
+        .select('id, name')
+        .single();
+
+    if (familyError) throw familyError;
+
+    try {
+      const { error: memberError } = await supabase
+        .from('family_members')
+        .insert(uniqueIds.map(personId => ({
+          family_id: family.id,
+          person_id: personId
+        })));
+
+      if (memberError) throw memberError;
+
+      const { error: loginError } = await supabase
+        .from('family_logins')
+        .insert(normalizedEmails.map(email => ({
+          family_id: family.id,
+          email
+        })));
+
+      if (loginError) throw loginError;
+    } catch (insertError) {
+      // Fehlgeschlagene Neuanlage aufräumen
+      const { error: cleanupError } = await supabase
+        .from('family_accounts')
+        .delete()
+        .eq('id', family.id);
+
+      if (cleanupError) {
+        console.error('Familie konnte nicht bereinigt werden:', cleanupError);
+      }
+      throw insertError;
+    }
+
+    res.status(201).json({
+      success: true,
+      data: family,
+      message: 'Familie erfolgreich erstellt.'
+    });
+  } catch (error) {
+    console.error('Familie erstellen:', error);
+
+    res.status(500).json({
+      success: false,
+      message: 'Familie konnte nicht erstellt werden.'
+    });
+  }
+});
+
 // User Management Endpoints
 
 // Get all persons
@@ -460,7 +710,15 @@ app.get('/api/persons/:id', requireAuth, async (req, res) => {
         message: 'Person nicht gefunden'
       })
     }
-    if (!req.isAdmin && String(person.email || '').toLowerCase() !== req.user.email.toLowerCase()) {
+    
+  if (
+    !req.isAdmin &&
+    !(await familyService.canManagePerson(
+      req.user.email,
+      person.id
+    ))
+  ) {
+
       return res.status(404).json({ success: false, message: 'Person nicht gefunden' })
     }
     res.json({
@@ -635,9 +893,18 @@ app.get('/api/events/:eventId/timeslots/:timeSlotId/participation', requireAuth,
     }
     let participation = await dataService.getTimeSlotParticipation(req.params.eventId, req.params.timeSlotId)
     if (!req.isAdmin) {
-      const person = await userService.getPersonByEmail(req.user.email)
-      if (!person) return res.status(403).json({ success: false, message: 'Kein zugeordnetes Mitgliederprofil gefunden' })
-      participation = participation.filter(entry => entry.person?.id === person.id)
+      
+    const allowedPersons =
+      await familyService.getAllowedPersons(req.user.email);
+
+    const allowedIds = new Set(
+      allowedPersons.map(person => String(person.id))
+    );
+
+    participation = participation.filter(
+      entry => allowedIds.has(String(entry.person?.id))
+    );
+
     }
     res.json({
       success: true,
@@ -662,9 +929,36 @@ app.post('/api/events/:eventId/timeslots/:timeSlotId/participation', requireAuth
       if (!event || event.status !== 'published') {
         return res.status(404).json({ success: false, message: 'Event nicht gefunden' })
       }
-      const person = await userService.getPersonByEmail(req.user.email)
-      if (!person) return res.status(403).json({ success: false, message: 'Kein zugeordnetes Mitgliederprofil gefunden' })
-      personId = person.id
+      
+const allowedPersons =
+  await familyService.getAllowedPersons(req.user.email);
+
+if (allowedPersons.length === 0) {
+  return res.status(403).json({
+    success: false,
+    message: 'Kein Mitgliederprofil gefunden.'
+  });
+}
+
+// Einzelmitglied: eigene Person verwenden
+if (allowedPersons.length === 1) {
+  personId = allowedPersons[0].id;
+} else {
+  // Familienkonto: ausgewählte Person prüfen
+  const allowed = await familyService.canManagePerson(
+    req.user.email,
+    personId
+  );
+
+  if (!allowed) {
+    return res.status(403).json({
+      success: false,
+      message:
+        'Diese Person gehört nicht zu deinem Familienkonto.'
+    });
+  }
+}
+
     }
     
     if (status === 'remove') {

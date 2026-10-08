@@ -17,7 +17,19 @@ const UserDashboard = ({ user, onLogout }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedEvent, setSelectedEvent] = useState(null);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  
+  const allowedPersons = user.allowedPersons?.length
+    ? user.allowedPersons
+    : [user];
+
+  const [selectedPersonBySlot, setSelectedPersonBySlot] =
+    useState({});
+
+  const getSelectedPersonId = timeSlotId => {
+    return selectedPersonBySlot[timeSlotId]
+      ?? allowedPersons[0]?.id;
+  };
+
 
   useEffect(() => {
     if (user && !user.isAdmin) {
@@ -85,7 +97,11 @@ const UserDashboard = ({ user, onLogout }) => {
               const participationResult = await participationResponse.json();
               
               if (participationResult.success) {
-                const myParticipation = participationResult.data.find(p => p.person.id === user.id);
+                const myParticipation = participationResult.data.find(
+                  p => allowedPersons.some(
+                    person => String(person.id) === String(p.person?.id)
+                  )
+                );
                 
                 // Add all participants data to the timeslot object
                 timeSlot.participants = participationResult.data;
@@ -116,16 +132,21 @@ const UserDashboard = ({ user, onLogout }) => {
     setTimeSlotParticipation(timeSlotParticipationData);
   };
 
-  const updateTimeSlotParticipation = async (eventId, timeSlotId, status) => {
+  const updateTimeSlotParticipation = async (
+    eventId,
+    timeSlotId,
+    status,
+    personId = getSelectedPersonId(timeSlotId)
+  ) => {
     try {
       const response = await apiFetch(`${API_BASE_URL}/api/events/${eventId}/timeslots/${timeSlotId}/participation`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
-          personId: user.id,
-          status: status
+        body: JSON.stringify({
+          personId,
+          status
         })
       });
 
@@ -337,8 +358,16 @@ const myParticipationTimeSlots = eventTimeSlots.filter(timeSlot =>
                             <h4 className="category-header">{category}</h4>
                             <div className="timeslots-grid">
                               {sortedSlots.map((timeSlot) => {
-                                const timeSlotParticipation = getTimeSlotParticipation(selectedEvent.id, timeSlot.id);
-                                const isSignedUp = timeSlotParticipation.status === 'accepted';
+                                
+                              const selectedPersonId =
+                                getSelectedPersonId(timeSlot.id);
+
+                              const isSignedUp = (timeSlot.participants || []).some(
+                                entry =>
+                                  entry.status === 'accepted' &&
+                                  String(entry.person?.id) === String(selectedPersonId)
+                              );
+
                                 const isFull = timeSlot.isFull;
                                 const availableSpots = timeSlot.availableSpots;
                                 
@@ -372,6 +401,37 @@ const myParticipationTimeSlots = eventTimeSlots.filter(timeSlot =>
                                     </div>
 
                                     <div className="timeslot-actions">
+                                      
+                                      {allowedPersons.length > 1 && (
+                                        <div className="family-person-select">
+                                          <label
+                                            htmlFor={`person-select-${timeSlot.id}`}
+                                          >
+                                            Person auswählen:
+                                          </label>
+
+                                          <select
+                                            id={`person-select-${timeSlot.id}`}
+                                            value={getSelectedPersonId(timeSlot.id)}
+                                            onChange={(e) =>
+                                              setSelectedPersonBySlot(prev => ({
+                                                ...prev,
+                                                [timeSlot.id]: Number(e.target.value)
+                                              }))
+                                            }
+                                          >
+                                            {allowedPersons.map(person => (
+                                              <option
+                                                key={person.id}
+                                                value={person.id}
+                                              >
+                                                {person.fullName}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        </div>
+                                      )}
+
                                       {isSignedUp ? (
                                         <button 
                                           className="btn-timeslot-cancel"
