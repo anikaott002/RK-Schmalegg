@@ -131,12 +131,15 @@ const AdminPage = () => {
     }
   };
 
-  // Generate year options (current year and 5 years back)
+ 
+  // Jahresfilter: nächstes Jahr, aktuelles Jahr und 5 Jahre zurück
   const currentYear = new Date().getFullYear();
   const yearOptions = [];
-  for (let i = 0; i <= 5; i++) {
-    yearOptions.push(currentYear - i);
+
+  for (let year = currentYear + 1; year >= currentYear - 5; year--) {
+    yearOptions.push(year);
   }
+
 
   const handleEventClick = (event) => {
     navigate(`/admin/events/${event.id}`);
