@@ -570,61 +570,6 @@ app.get('/api/families', requireAdmin, async (req, res) => {
 });
 
 
-    const result = [];
-
-    for (const family of families || []) {
-      const { data: links, error: membersError } =
-        await supabase
-          .from('family_members')
-          .select('person_id')
-          .eq('family_id', family.id);
-
-      if (membersError) throw membersError;
-
-      const ids = (links || []).map(m => m.person_id);
-      let members = [];
-
-      if (ids.length) {
-        const { data, error: personError } = await supabase
-          .from('persons')
-          .select('id, first_name, last_name')
-          .in('id', ids);
-
-        if (personError) throw personError;
-
-        members = (data || []).map(person => ({
-          id: person.id,
-          fullName:
-            `${person.first_name} ${person.last_name}`
-        }));
-      }
-
-      const { data: logins, error: loginError } =
-        await supabase
-          .from('family_logins')
-          .select('email')
-          .eq('family_id', family.id);
-
-      if (loginError) throw loginError;
-
-      result.push({
-        id: family.id,
-        name: family.name,
-        members,
-        emails: (logins || []).map(login => login.email)
-      });
-    }
-
-    res.json({ success: true, data: result });
-  } catch (error) {
-    console.error('Familien laden:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Familien konnten nicht geladen werden.'
-    });
-  }
-});
-
 // Neue Familie erstellen – nur Admin
 app.post('/api/families', requireAdmin, async (req, res) => {
   const name = String(req.body?.name || '').trim();
