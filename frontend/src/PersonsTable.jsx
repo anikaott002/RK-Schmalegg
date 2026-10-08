@@ -17,6 +17,9 @@ const PersonsTable = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [selectedYear, setSelectedYear] = useState(
+    new Date().getFullYear()
+  );
   const [latestEventYear, setLatestEventYear] = useState(
     new Date().getFullYear()
   );
@@ -27,9 +30,16 @@ const PersonsTable = () => {
     phone: ''
   });
 
-  useEffect(() => {
-    fetchEventYears();
-  }, [activeTab]);
+  
+useEffect(() => {
+  fetchPersons();
+  fetchFamilies();
+}, [selectedYear]);
+
+useEffect(() => {
+  fetchEventYears();
+}, [activeTab]);
+
 
   const fetchPersons = async () => {
     try {
