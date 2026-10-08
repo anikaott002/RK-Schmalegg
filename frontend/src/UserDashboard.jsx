@@ -25,6 +25,7 @@ const UserDashboard = ({ user, onLogout }) => {
 
   const [selectedPersonBySlot, setSelectedPersonBySlot] =
     useState({});
+  const [pendingSlots, setPendingSlots] = useState({});
 
   const getSelectedPersonId = timeSlotId => {
     return selectedPersonBySlot[timeSlotId]
@@ -227,29 +228,65 @@ const fetchTimeSlotParticipation = async (eventsList) => {
     status,
     personId = getSelectedPersonId(timeSlotId)
   ) => {
+    const pendingKey = `${eventId}:${timeSlotId}`;
+    if (pendingSlots[pendingKey]) return;
+    setPendingSlots(previous => ({ ...previous, [pendingKey]: true }));
+    setError('');
+
     try {
       const response = await apiFetch(`${API_BASE_URL}/api/events/${eventId}/timeslots/${timeSlotId}/participation`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          personId,
-          status
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ personId, status })
       });
-
       const result = await response.json();
-      
-      if (result.success) {
-        await refreshOneTimeSlot(eventId, timeSlotId);
-        setError('');
-      } else {
-        setError(result.message || 'Fehler beim Aktualisieren der Zeitslot-Teilnahme');
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Teilnahme konnte nicht gespeichert werden');
       }
+
+      // Direkt die erfolgreiche Antwort anzeigen, ohne einen weiteren GET abzuwarten.
+      setTimeSlotParticipation(previous => previous.map(entry => {
+        if (String(entry.eventId) !== String(eventId) || String(entry.timeSlotId) !== String(timeSlotId)) {
+          return entry;
+        }
+        const oldParticipants = entry.timeSlot.participants || [];
+        const remaining = oldParticipants.filter(item => String(item.person?.id) !== String(personId));
+        const selectedPerson = allowedPersons.find(person => String(person.id) === String(personId));
+        const participants = status === 'remove'
+          ? remaining
+          : [...remaining, { person: { id: personId, fullName: selectedPerson?.fullName || '' }, status: 'accepted' }];
+        const oldSpots = Number(entry.timeSlot.availableSpots);
+        const wasAccepted = oldParticipants.some(item => String(item.person?.id) === String(personId) && item.status === 'accepted');
+        const change = status === 'remove' ? (wasAccepted ? 1 : 0) : (wasAccepted ? 0 : -1);
+        const availableSpots = Number.isFinite(oldSpots) ? Math.max(0, oldSpots + change) : entry.timeSlot.availableSpots;
+        return {
+          ...entry,
+          timeSlot: {
+            ...entry.timeSlot,
+            participants,
+            availableSpots,
+            isFull: Number.isFinite(Number(availableSpots)) && Number(entry.timeSlot.maxParticipants) > 0
+              ? Number(availableSpots) <= 0
+              : entry.timeSlot.isFull
+          },
+          participation: participants.find(item => allowedPersons.some(person => String(person.id) === String(item.person?.id))) || { status: 'not_responded' }
+        };
+      }));
+
+      // Unabhängig von der Button-Anzeige den tatsächlichen Serverstand abgleichen.
+      // Fehler beim Hintergrundabgleich ändern den bestätigten Anmeldestatus nicht.
+      refreshOneTimeSlot(eventId, timeSlotId).catch(error => {
+        console.error('Hintergrundaktualisierung fehlgeschlagen:', error);
+      });
     } catch (error) {
-      setError('Verbindungsfehler');
+      setError(error.message || 'Verbindungsfehler');
       console.error('Error updating timeslot participation:', error);
+    } finally {
+      setPendingSlots(previous => {
+        const next = { ...previous };
+        delete next[pendingKey];
+        return next;
+      });
     }
   };
 
@@ -448,6 +485,7 @@ const myParticipationTimeSlots = eventTimeSlots.filter(timeSlot =>
                             <div className="timeslots-grid">
                               {sortedSlots.map((timeSlot) => {
                                 
+                              const isPending = Boolean(pendingSlots[`${selectedEvent.id}:${timeSlot.id}`]);
                               const selectedPersonId =
                                 getSelectedPersonId(timeSlot.id);
 
@@ -521,7 +559,9 @@ const myParticipationTimeSlots = eventTimeSlots.filter(timeSlot =>
                                         </div>
                                       )}
 
-                                      {isSignedUp ? (
+                                      {isPending ? (
+                                        <button type="button" className="btn-timeslot-signup" disabled>Wird gespeichert...</button>
+                                      ) : isSignedUp ? (
                                         <button 
                                           className="btn-timeslot-cancel"
                                           onClick={() => updateTimeSlotParticipation(selectedEvent.id, timeSlot.id, 'remove')}
