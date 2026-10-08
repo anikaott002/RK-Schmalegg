@@ -17,7 +17,9 @@ const PersonsTable = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [latestEventYear, setLatestEventYear] = useState(
+    new Date().getFullYear()
+  );
   const [newPerson, setNewPerson] = useState({
     firstName: '',
     lastName: '',
@@ -26,9 +28,8 @@ const PersonsTable = () => {
   });
 
   useEffect(() => {
-    fetchPersons();
-    fetchFamilies();
-  }, [selectedYear]);
+    fetchEventYears();
+  }, [activeTab]);
 
   const fetchPersons = async () => {
     try {
@@ -76,6 +77,52 @@ const fetchFamilies = async () => {
     setFamiliesLoading(false);
   }
 };
+
+
+const fetchEventYears = async () => {
+  try {
+    const response = await apiFetch(
+      `${API_BASE_URL}/api/events`
+    );
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error('Event-Jahre konnten nicht geladen werden');
+    }
+
+    const currentYear = new Date().getFullYear();
+    let maxYear = currentYear;
+
+    (result.data || []).forEach(event => {
+      const dates = [
+        event.dateFrom,
+        event.dateTo,
+        ...(event.timeSlots || []).map(slot => slot.date)
+      ];
+
+      dates.forEach(date => {
+        if (!date) return;
+
+        const year = Number(String(date).slice(0, 4));
+
+        if (
+          Number.isInteger(year) &&
+          year >= 2000 &&
+          year <= 2100
+        ) {
+          maxYear = Math.max(maxYear, year);
+        }
+      });
+    });
+
+    setLatestEventYear(maxYear);
+
+  } catch (error) {
+    console.error('Fehler beim Laden der Event-Jahre:', error);
+  }
+};
+
 
 
   const handleAddPerson = async () => {
