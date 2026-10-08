@@ -83,81 +83,143 @@ const UserDashboard = ({ user, onLogout }) => {
 
   // Slots parallel laden, damit beim direkten Öffnen eines Events die Anzeige nicht
   // auf die Antworten aller anderen Events nacheinander warten muss.
-  const fetchTimeSlotParticipation = async (eventsList) => {
-    const results = await Promise.all(eventsList.map(async (event) => {
+  
+const fetchTimeSlotParticipation = async (eventsList) => {
+  const results = await Promise.all(
+    eventsList.map(async event => {
       try {
-        const slotsResponse = await apiFetch(`${API_BASE_URL}/api/events/${event.id}/timeslots`);
-        if (!slotsResponse.ok) throw new Error('Zeitslots konnten nicht geladen werden');
-        const slotsResult = await slotsResponse.json();
-        if (!slotsResult.success) throw new Error('Zeitslots konnten nicht geladen werden');
+        const response = await apiFetch(
+          `${API_BASE_URL}/api/events/${event.id}/my-timeslots`
+        );
 
-        return Promise.all((slotsResult.data || []).map(async (timeSlot) => {
-          let participants = [];
-          try {
-            const participationResponse = await apiFetch(
-              `${API_BASE_URL}/api/events/${event.id}/timeslots/${timeSlot.id}/participation`
-            );
-            if (!participationResponse.ok) throw new Error('Teilnahmen konnten nicht geladen werden');
-            const participationResult = await participationResponse.json();
-            if (!participationResult.success) throw new Error('Teilnahmen konnten nicht geladen werden');
-            participants = participationResult.data || [];
-          } catch (err) {
-            console.error(`Teilnahmen für Slot ${timeSlot.id}:`, err);
-          }
+        if (!response.ok) {
+          throw new Error('Zeitslots konnten nicht geladen werden');
+        }
+
+        const result = await response.json();
+
+        if (!result.success) {
+          throw new Error(
+            result.message || 'Zeitslots konnten nicht geladen werden'
+          );
+        }
+
+        return (result.data || []).map(timeSlot => {
+          const participants = timeSlot.participants || [];
 
           const myParticipation = participants.find(p =>
-            allowedPersons.some(person => String(person.id) === String(p.person?.id))
+            allowedPersons.some(person =>
+              String(person.id) === String(p.person?.id)
+            )
           );
+
           return {
             eventId: event.id,
             timeSlotId: timeSlot.id,
-            timeSlot: { ...timeSlot, participants },
-            participation: myParticipation || { status: 'not_responded' }
+            timeSlot: {
+              ...timeSlot,
+              participants
+            },
+            participation: myParticipation || {
+              status: 'not_responded'
+            }
           };
-        }));
-      } catch (err) {
-        console.error(`Zeitslots für Event ${event.id}:`, err);
+        });
+
+      } catch (error) {
+        console.error(
+          `Zeitslots für Event ${event.id}:`,
+          error
+        );
         return [];
       }
-    }));
-    setTimeSlotParticipation(results.flat());
-  };
+    })
+  );
+
+  setTimeSlotParticipation(results.flat());
+};
+
 
   // Nach einer Anmeldung nur den betroffenen Slot neu abrufen, ohne die Eventseite
   // zu verlassen oder sämtliche anderen Events erneut zu laden.
+   
   const refreshOneTimeSlot = async (eventId, timeSlotId) => {
-    const [slotsResponse, participationResponse] = await Promise.all([
-      apiFetch(`${API_BASE_URL}/api/events/${eventId}/timeslots`),
-      apiFetch(`${API_BASE_URL}/api/events/${eventId}/timeslots/${timeSlotId}/participation`)
-    ]);
-    if (!slotsResponse.ok || !participationResponse.ok) {
-      throw new Error('Aktualisierung fehlgeschlagen');
-    }
-    const [slotsResult, participationResult] = await Promise.all([
-      slotsResponse.json(), participationResponse.json()
-    ]);
-    if (!slotsResult.success || !participationResult.success) {
-      throw new Error('Aktualisierung fehlgeschlagen');
-    }
-    const slot = (slotsResult.data || []).find(s => String(s.id) === String(timeSlotId));
-    if (!slot) throw new Error('Zeitslot nicht gefunden');
-    const participants = participationResult.data || [];
-    const myParticipation = participants.find(p =>
-      allowedPersons.some(person => String(person.id) === String(p.person?.id))
+    const response = await apiFetch(
+      `${API_BASE_URL}/api/events/${eventId}/my-timeslots`
     );
-    setTimeSlotParticipation(previous => {
-      const nextEntry = {
-        eventId,
-        timeSlotId,
-        timeSlot: { ...slot, participants },
-        participation: myParticipation || { status: 'not_responded' }
-      };
-      const remaining = previous.filter(p =>
-        !(String(p.eventId) === String(eventId) && String(p.timeSlotId) === String(timeSlotId))
+
+    if (!response.ok) {
+      throw new Error('Aktualisierung fehlgeschlagen');
+    }
+
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error('Aktualisierung fehlgeschlagen');
+    }
+
+    const updatedEntries = (result.data || []).map(slot => {
+      const participants = slot.participants || [];
+
+      const myParticipation = participants.find(p =>
+        allowedPersons.some(person =>
+          String(person.id) === String(p.person?.id)
+        )
       );
-      return [...remaining, nextEntry];
+
+      return {
+        eventId: Number(eventId),
+        timeSlotId: slot.id,
+        timeSlot: {
+          ...slot,
+          participants
+        },
+        participation: myParticipation || {
+          status: 'not_responded'
+        }
+      };
     });
+
+    setTimeSlotParticipation(previous => [
+      ...previous.filter(
+        entry => String(entry.eventId) !== String(eventId)
+      ),
+      ...updatedEntries
+    ]);
   };
+
+  //   const [slotsResponse, participationResponse] = await Promise.all([
+  //     apiFetch(`${API_BASE_URL}/api/events/${eventId}/timeslots`),
+  //     apiFetch(`${API_BASE_URL}/api/events/${eventId}/timeslots/${timeSlotId}/participation`)
+  //   ]);
+  //   if (!slotsResponse.ok || !participationResponse.ok) {
+  //     throw new Error('Aktualisierung fehlgeschlagen');
+  //   }
+  //   const [slotsResult, participationResult] = await Promise.all([
+  //     slotsResponse.json(), participationResponse.json()
+  //   ]);
+  //   if (!slotsResult.success || !participationResult.success) {
+  //     throw new Error('Aktualisierung fehlgeschlagen');
+  //   }
+  //   const slot = (slotsResult.data || []).find(s => String(s.id) === String(timeSlotId));
+  //   if (!slot) throw new Error('Zeitslot nicht gefunden');
+  //   const participants = participationResult.data || [];
+  //   const myParticipation = participants.find(p =>
+  //     allowedPersons.some(person => String(person.id) === String(p.person?.id))
+  //   );
+  //   setTimeSlotParticipation(previous => {
+  //     const nextEntry = {
+  //       eventId,
+  //       timeSlotId,
+  //       timeSlot: { ...slot, participants },
+  //       participation: myParticipation || { status: 'not_responded' }
+  //     };
+  //     const remaining = previous.filter(p =>
+  //       !(String(p.eventId) === String(eventId) && String(p.timeSlotId) === String(timeSlotId))
+  //     );
+  //     return [...remaining, nextEntry];
+  //   });
+  // };
 
   const updateTimeSlotParticipation = async (
     eventId,

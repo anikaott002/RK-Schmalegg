@@ -473,6 +473,7 @@ const validEmail = email =>
 
 // Alle Familien abrufen – nur Admin
 
+
 app.get('/api/families', requireAdmin, async (req, res) => {
   try {
     const year = req.query.year
@@ -486,47 +487,80 @@ app.get('/api/families', requireAdmin, async (req, res) => {
       });
     }
 
-    const { data: families, error: familyError } =
-      await supabase
+    // Familien, Zuordnungen und Login-E-Mails parallel laden
+    const [
+      familiesResult,
+      membersResult,
+      loginsResult,
+      persons
+    ] = await Promise.all([
+      supabase
         .from('family_accounts')
         .select('id, name')
-        .order('name');
+        .order('name'),
 
-    if (familyError) throw familyError;
+      supabase
+        .from('family_members')
+        .select('family_id, person_id'),
 
-    // Bestehende Stundenberechnung wiederverwenden
-    const persons = await userService.getAllPersons(year);
+      supabase
+        .from('family_logins')
+        .select('family_id, email'),
+
+      userService.getAllPersons(year)
+    ]);
+
+    if (familiesResult.error) throw familiesResult.error;
+    if (membersResult.error) throw membersResult.error;
+    if (loginsResult.error) throw loginsResult.error;
+
+    const families = familiesResult.data || [];
+    const memberLinks = membersResult.data || [];
+    const logins = loginsResult.data || [];
+
+    // Personen einmalig nach ID zuordnen
     const personsById = new Map(
-      persons.map(p => [String(p.id), p])
+      persons.map(person => [String(person.id), person])
     );
 
-    const result = [];
+    // Familienmitglieder gruppieren
+    const membersByFamily = new Map();
 
-    for (const family of families || []) {
-      const { data: memberLinks, error: memberError } =
-        await supabase
-          .from('family_members')
-          .select('person_id')
-          .eq('family_id', family.id);
+    for (const link of memberLinks) {
+      const familyId = String(link.family_id);
+      const person = personsById.get(String(link.person_id));
 
-      if (memberError) throw memberError;
+      if (!person) continue;
 
-      const members = (memberLinks || [])
-        .map(link => personsById.get(String(link.person_id)))
-        .filter(Boolean);
+      if (!membersByFamily.has(familyId)) {
+        membersByFamily.set(familyId, []);
+      }
 
-      const { data: logins, error: loginError } =
-        await supabase
-          .from('family_logins')
-          .select('email')
-          .eq('family_id', family.id);
+      membersByFamily.get(familyId).push(person);
+    }
 
-      if (loginError) throw loginError;
+    // E-Mail-Adressen gruppieren
+    const emailsByFamily = new Map();
+
+    for (const login of logins) {
+      const familyId = String(login.family_id);
+
+      if (!emailsByFamily.has(familyId)) {
+        emailsByFamily.set(familyId, []);
+      }
+
+      if (login.email) {
+        emailsByFamily.get(familyId).push(login.email);
+      }
+    }
+
+    // Ergebnis für die Familientabelle zusammenstellen
+    const result = families.map(family => {
+      const familyId = String(family.id);
+      const members = membersByFamily.get(familyId) || [];
 
       const emails = [...new Set(
-        (logins || [])
-          .map(login => login.email)
-          .filter(Boolean)
+        emailsByFamily.get(familyId) || []
       )];
 
       const phones = [...new Set(
@@ -543,15 +577,15 @@ app.get('/api/families', requireAdmin, async (req, res) => {
         ) * 10
       ) / 10;
 
-      result.push({
+      return {
         id: family.id,
         name: family.name,
         emails,
         phones,
         members,
         totalHours
-      });
-    }
+      };
+    });
 
     res.json({
       success: true,
@@ -568,6 +602,7 @@ app.get('/api/families', requireAdmin, async (req, res) => {
     });
   }
 });
+
 
 
 // Neue Familie erstellen – nur Admin
@@ -917,6 +952,70 @@ app.delete('/api/events/:eventId/timeslots/:timeSlotId', requireAdmin, async (re
     })
   }
 })
+
+// Alle Zeitslots eines Events mit eigenen Teilnahmen laden
+app.get(
+  '/api/events/:eventId/my-timeslots',
+  requireAuth,
+  async (req, res) => {
+    try {
+      const event = await dataService.getEventById(
+        req.params.eventId
+      );
+
+      if (!event || (!req.isAdmin && event.status !== 'published')) {
+        return res.status(404).json({
+          success: false,
+          message: 'Event nicht gefunden'
+        });
+      }
+
+      const allowedPersons = req.isAdmin
+        ? []
+        : await familyService.getAllowedPersons(req.user.email);
+
+      const allowedIds = new Set(
+        allowedPersons.map(person => String(person.id))
+      );
+
+      const timeSlots = (event.timeSlots || []).map(slot => {
+        const participants = req.isAdmin
+          ? slot.participants || []
+          : (slot.participants || []).filter(entry =>
+              allowedIds.has(String(entry.person?.id))
+            );
+
+        return {
+          id: slot.id,
+          name: slot.name,
+          date: slot.date,
+          timeFrom: slot.timeFrom,
+          timeTo: slot.timeTo,
+          category: slot.category,
+          maxParticipants: slot.maxParticipants,
+          availableSpots: slot.availableSpots,
+          isFull: slot.isFull,
+          participants
+        };
+      });
+
+      res.json({
+        success: true,
+        data: timeSlots,
+        eventId: event.id
+      });
+
+    } catch (error) {
+      console.error('Zeitslots laden:', error);
+
+      res.status(500).json({
+        success: false,
+        message: 'Zeitslots konnten nicht geladen werden.'
+      });
+    }
+  }
+);
+
 
 // Get time slot participation
 app.get('/api/events/:eventId/timeslots/:timeSlotId/participation', requireAuth, async (req, res) => {

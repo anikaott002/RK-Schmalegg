@@ -56,16 +56,38 @@ export async function calculatePersonHours(personId, year = null) {
   };
 }
 
+
 export async function getAllPersons(year = null) {
-  const { data, error } = await supabase.from('persons').select('*').order('last_name').order('first_name');
+  const { data, error } = await supabase
+    .from('persons')
+    .select('*')
+    .order('last_name')
+    .order('first_name');
+
   if (error) throw error;
+
+  const rows = data || [];
   const results = [];
-  for (const row of data || []) {
-    const hours = await calculatePersonHours(row.id, year);
-    results.push(rowToPerson(row, hours));
+
+  // Maximal 10 Personen gleichzeitig berechnen
+  const BATCH_SIZE = 10;
+
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE);
+
+    const calculated = await Promise.all(
+      batch.map(async row => {
+        const hours = await calculatePersonHours(row.id, year);
+        return rowToPerson(row, hours);
+      })
+    );
+
+    results.push(...calculated);
   }
+
   return results;
 }
+
 
 export async function getPersonById(id) {
   const { data, error } = await supabase.from('persons').select('*').eq('id', Number(id)).maybeSingle();
