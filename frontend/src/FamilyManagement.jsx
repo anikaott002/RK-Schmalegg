@@ -11,6 +11,7 @@ export default function FamilyManagement({
   selectedYear = new Date().getFullYear()
 }) {
   const [families, setFamilies] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
   const [emails, setEmails] = useState(['']);
   const [memberIds, setMemberIds] = useState([]);
@@ -18,22 +19,33 @@ export default function FamilyManagement({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  
   async function loadFamilies() {
     try {
+      setLoading(true);
+      setError('');
+
       const response = await apiFetch(
         `${API}/api/families?year=${selectedYear}`
       );
+
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || 'Laden fehlgeschlagen');
+        throw new Error(
+          result.message || 'Familien konnten nicht geladen werden.'
+        );
       }
 
       setFamilies(result.data || []);
     } catch (err) {
+      console.error('Fehler beim Laden der Familien:', err);
       setError(err.message);
+    } finally {
+      setLoading(false);
     }
   }
+
 
   useEffect(() => {
     loadFamilies();
@@ -189,63 +201,54 @@ export default function FamilyManagement({
           </button>
         </form>
       )}
-
       
       <div className="persons-table family-table">
-        <table>
-          <thead>
-            <tr>
-              <th>Familie</th>
-              <th>E-Mail</th>
-              <th>Telefon</th>
-              <th>Geleistete Stunden</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {families.map(family => (
-              <tr key={family.id}>
-                <td>
-                  <div className="person-name">
-                    <strong>{family.name}</strong>
-                  </div>
-                </td>
-
-                <td>
-                  {(family.emails || []).length
-                    ? family.emails.map(email => (
-                        <div key={email} className="family-contact">
-                          {email}
-                        </div>
-                      ))
-                    : '–'}
-                </td>
-
-                <td>
-                  {(family.phones || []).length
-                    ? family.phones.map(phone => (
-                        <div key={phone} className="family-contact">
-                          {phone}
-                        </div>
-                      ))
-                    : '–'}
-                </td>
-
-                <td className="hours-cell">
-                  {family.totalHours || 0} h
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {families.length === 0 && (
+        {loading ? (
+          <div className="no-data">
+            Familien werden geladen...
+          </div>
+        ) : error ? null : families.length === 0 ? (
           <div className="no-data">
             Es wurden noch keine Familien angelegt.
           </div>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Familie</th>
+                <th>E-Mail</th>
+                <th>Telefon</th>
+                <th>Geleistete Stunden</th>
+              </tr>
+            </thead>
+            <tbody>
+              {families.map(family => (
+                <tr key={family.id}>
+                  <td>
+                    <strong>{family.name}</strong>
+                  </td>
+                  <td>
+                    {(family.emails || []).map(email => (
+                      <div key={email}>{email}</div>
+                    ))}
+                  </td>
+                  <td>
+                    {(family.phones || []).map(phone => (
+                      <div key={phone}>{phone}</div>
+                    ))}
+                  </td>
+                  <td>
+                    {family.totalHours || 0} h
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
-
     </div>
   );
 }
+
+
+
