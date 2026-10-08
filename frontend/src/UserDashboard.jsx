@@ -17,6 +17,9 @@ const UserDashboard = ({ user, onLogout }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [selectedYear, setSelectedYear] = useState(
+  new Date().getFullYear()
+);
   
   const allowedPersons = user.allowedPersons?.length
     ? user.allowedPersons
